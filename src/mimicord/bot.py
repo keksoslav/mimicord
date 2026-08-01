@@ -45,9 +45,11 @@ class MimicClient(discord.Client):
 
     async def on_ready(self) -> None:
         llm = self.engine.config.llm
-        mode = "dry run, replies print to stdout" if self.dry_run else "live"
-        print(f"logged in as {self.user} ({mode})")
-        print(f"persona {self.engine.config.name} via {llm.provider}/{llm.model}")
+        mode = "dry run, replies stay local" if self.dry_run else "live"
+        log.info("logged in as %s (%s)", self.user, mode)
+        log.info(
+            "persona %s via %s/%s", self.engine.config.name, llm.provider, llm.model
+        )
 
     async def on_message(self, message: discord.Message) -> None:
         if self.user is not None and message.author.id == self.user.id:
@@ -134,7 +136,7 @@ class MimicClient(discord.Client):
         persona = self.engine.config.name
         for burst in bursts:
             if self.dry_run:
-                print(f"[dry run #{channel}] {persona}: {burst}")
+                log.info("[dry run #%s] %s: %s", channel, persona, burst)
             else:
                 async with channel.typing():
                     delay = min(len(burst) / self.style.typing_cps, 6.0)
@@ -145,6 +147,9 @@ class MimicClient(discord.Client):
 
 
 def run(name: str, *, dry_run: bool = False) -> None:
+    # bot status lines are log records so both the cli and the gui can show
+    # them; make sure they clear the default warning threshold
+    logging.getLogger("mimicord").setLevel(logging.INFO)
     engine = PersonaEngine(name)
     token = engine.config.discord.token()
     client = MimicClient(engine, dry_run=dry_run)
