@@ -1,0 +1,10 @@
+# chat data and compiled personas never leave this machine
+personas/
+
+.env
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+dist/
+*.egg-info/
