@@ -122,5 +122,18 @@ def chat(
     repl.run(name, rag=not no_rag, show_prompt=show_prompt)
 
 
+@app.command()
+def run(
+    name: str,
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="connect and listen but print replies instead of sending"
+    ),
+) -> None:
+    """Run the Discord bot for a persona."""
+    from mimicord import bot
+
+    bot.run(name, dry_run=dry_run)
+
+
 if __name__ == "__main__":
     app()
