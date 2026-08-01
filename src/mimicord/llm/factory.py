@@ -23,4 +23,8 @@ def get_provider(cfg: LLMConfig, role: str = "chat") -> Provider:
 
     if cfg.provider == "anthropic":
         return AnthropicProvider(model, cache_ttl=cfg.cache_ttl, thinking=thinking)
+    if cfg.provider == "claude-code":
+        from mimicord.llm.claude_code import ClaudeCodeProvider
+
+        return ClaudeCodeProvider(model)
     return OpenAICompatProvider(cfg.provider, model)

@@ -84,9 +84,18 @@ Everything lives in `personas/<name>/persona.toml`. The important knobs:
 | provider | notes |
 | --- | --- |
 | anthropic | default `claude-opus-5`; the persona prompt and few-shots are prompt-cached, which cuts input cost by roughly 90% on consecutive replies |
+| claude-code | bills your claude.ai subscription instead of an API key, see below |
 | openai | `gpt-4o` default, set any model you have access to |
 | deepseek | cheap, OpenAI-compatible API |
 | ollama | free and local; lower `context_messages` and example count for small context models |
+
+### Using a claude.ai subscription (no API key)
+
+Pro and Max plans include a monthly Agent SDK credit ($20 Pro, $100 Max 5x, $200 Max 20x) that covers third-party apps built on the Claude Agent SDK. Set `provider = "claude-code"` and `model = "sonnet"` (or `opus`/`haiku`) and mimicord routes replies through your local Claude Code login, drawing from that credit instead of API billing. Requirements: Claude Code installed and signed in on the machine running the bot.
+
+Two properties make this the relaxed option: the credit hard-stops when spent (no surprise charges unless you explicitly enable extra usage credits on your account), and it is a separate pool from your chat and Claude Code limits. For an extra belt, set `max_replies_per_month` in persona.toml; the bot tracks its own reply count in `usage.json` and goes quiet when the budget is reached, resetting monthly. Replies are a bit slower than the raw API because each one runs through the Claude Code harness, which the typing simulation hides well.
+
+Do not point the regular `anthropic` provider at a claude.ai OAuth token; that violates the consumer terms. The `claude-code` provider is the supported route.
 
 Compiling a persona from a ~20k message corpus costs well under a dollar with a cheap analyze model (`claude-haiku-4-5`) and is a one-time cost. Replies are roughly a cent each on `claude-opus-5` with caching, a fifth of that on `claude-haiku-4-5`, free on Ollama. `mimicord inspect <name> --cost` prints an estimate for your actual persona, and the hourly reply cap bounds the worst case.
 

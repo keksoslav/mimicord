@@ -13,6 +13,7 @@ dependencies = [
     "chromadb>=1.0",
     "typer>=0.15",
     "python-dotenv>=1.0",
+    "claude-agent-sdk>=0.2.128",
 ]
 
 [dependency-groups]

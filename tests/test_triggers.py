@@ -24,8 +24,8 @@ def cfg(**overrides) -> DiscordConfig:
     return config
 
 
-def decide(f, c, state=None, now=1000.0, roll=0.99):
-    return should_reply(f, c, state or TriggerState(), now, roll)
+def decide(f, c, state=None, now=1000.0, roll=0.99, monthly_count=0):
+    return should_reply(f, c, state or TriggerState(), now, roll, monthly_count)
 
 
 def test_ignores_own_messages():
@@ -107,6 +107,19 @@ def test_hourly_cap():
         False,
         "hourly cap",
     )
+
+
+def test_monthly_cap_blocks():
+    c = cfg(max_replies_per_month=100)
+    assert decide(facts(mentions_bot=True), c, monthly_count=100) == (
+        False,
+        "monthly cap",
+    )
+    assert decide(facts(mentions_bot=True), c, monthly_count=99)[0] is True
+
+
+def test_monthly_cap_zero_means_unlimited():
+    assert decide(facts(mentions_bot=True), cfg(), monthly_count=10_000)[0] is True
 
 
 def test_hourly_cap_expires():

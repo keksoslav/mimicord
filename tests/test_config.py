@@ -77,6 +77,20 @@ def test_missing_name(tmp_path):
         load_config(write(tmp_path, '[llm]\nprovider = "openai"\n'))
 
 
+def test_claude_code_provider(tmp_path):
+    cfg = load_config(
+        write(tmp_path, 'name = "x"\n[llm]\nprovider = "claude-code"\n')
+    )
+    assert cfg.llm.model == "sonnet"
+
+
+def test_monthly_cap_parsed(tmp_path):
+    cfg = load_config(
+        write(tmp_path, 'name = "x"\n[discord]\nmax_replies_per_month = 500\n')
+    )
+    assert cfg.discord.max_replies_per_month == 500
+
+
 def test_bad_provider(tmp_path):
     with pytest.raises(ConfigError, match="unknown provider"):
         load_config(write(tmp_path, 'name = "x"\n[llm]\nprovider = "gemini"\n'))
