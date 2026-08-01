@@ -1,0 +1,8 @@
+{
+  "guild": {"id": "1", "name": "Test Server"},
+  "channel": {"id": "999", "type": "GuildTextChat", "name": "general", "topic": null},
+  "messages": [
+    {"id": "1009", "type": "Default", "timestamp": "2024-03-01T19:00:00.000+02:00", "content": "LOL", "author": {"id": "111", "name": "janez123", "nickname": "Janez K."}, "attachments": []},
+    {"id": "1010", "type": "Default", "timestamp": "2024-03-01T19:00:30.000+02:00", "content": "haha res", "author": {"id": "222", "name": "miha"}, "attachments": []}
+  ]
+}
