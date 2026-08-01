@@ -30,6 +30,30 @@ class Provider(Protocol):
     ) -> str: ...
 
 
+def json_call(provider: Provider, *, system: str, user: str, max_tokens: int):
+    """One JSON-returning call with a single repair retry on parse failure."""
+    raw = provider.complete(
+        system=system, messages=[ChatMessage("user", user)], max_tokens=max_tokens
+    )
+    try:
+        return parse_json_lenient(raw)
+    except ProviderError as error:
+        repair = provider.complete(
+            system=system,
+            messages=[
+                ChatMessage("user", user),
+                ChatMessage("assistant", raw),
+                ChatMessage(
+                    "user",
+                    f"That was not valid JSON ({error}). "
+                    "Send only the corrected JSON, nothing else.",
+                ),
+            ],
+            max_tokens=max_tokens,
+        )
+        return parse_json_lenient(repair)
+
+
 _FENCE_RE = re.compile(r"^```[a-zA-Z]*\s*$", re.MULTILINE)
 
 

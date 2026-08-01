@@ -8,6 +8,7 @@ import pytest
 @dataclass
 class FakeProvider:
     reply: str = "ok"
+    replies: list = field(default_factory=list)  # scripted, consumed in order
     calls: list = field(default_factory=list)
 
     def complete(self, *, system, messages, max_tokens, temperature=None) -> str:
@@ -19,6 +20,8 @@ class FakeProvider:
                 "temperature": temperature,
             }
         )
+        if self.replies:
+            return self.replies.pop(0)
         return self.reply
 
 

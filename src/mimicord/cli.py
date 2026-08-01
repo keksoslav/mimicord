@@ -223,6 +223,109 @@ def inspect(name: str) -> None:
 
 
 @app.command()
+def analyze(
+    name: str,
+    sample: int = typer.Option(50, "--sample", help="max chunks to analyze"),
+    fresh: bool = typer.Option(
+        False, "--fresh", help="ignore cached chunk analyses and redo everything"
+    ),
+) -> None:
+    """LLM style analysis over the corpus (map per chunk, then one reduce)."""
+    import json
+
+    from mimicord.analyze.chunker import build_chunks, sample_chunks
+    from mimicord.analyze.mapper import analyze_chunks
+    from mimicord.analyze.reducer import reduce_profiles
+    from mimicord.config import load_config
+    from mimicord.llm.factory import get_provider
+    from mimicord.store import Store
+
+    paths = PersonaPaths.for_persona(name)
+    cfg = load_config(paths.config)
+    if not paths.corpus.is_file():
+        typer.echo("no corpus yet, run mimicord ingest first")
+        raise typer.Exit(1)
+
+    with Store(paths.corpus) as store:
+        chunks = sample_chunks(build_chunks(store), cap=sample)
+        if not chunks:
+            typer.echo("corpus has no target messages to analyze")
+            raise typer.Exit(1)
+        typer.echo(f"analyzing {len(chunks)} chunks with {cfg.llm.provider}")
+
+        map_provider = get_provider(cfg.llm, role="map")
+
+        def progress(chunk, cached):
+            note = "cached" if cached else "done"
+            typer.echo(
+                f"  chunk {chunk.index + 1}/{len(chunks)} "
+                f"({chunk.channel_name or chunk.channel_id}, "
+                f"{chunk.target_count} target msgs) {note}"
+            )
+
+        results = analyze_chunks(
+            chunks,
+            map_provider,
+            cfg.name,
+            paths.chunks_dir,
+            resume=not fresh,
+            progress=progress,
+        )
+
+    typer.echo("merging into one profile...")
+    reduce_provider = get_provider(cfg.llm, role="reduce")
+    profile = reduce_profiles(results, reduce_provider, cfg.name)
+    paths.profile.write_text(
+        json.dumps(profile, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+    typer.echo(f"wrote {paths.profile}")
+
+
+@app.command("compile")
+def compile_cmd(
+    name: str,
+    examples: int = typer.Option(20, "--examples", help="few-shot examples to keep"),
+) -> None:
+    """Generate persona.md and few-shot examples from the analysis."""
+    import json
+
+    from mimicord.compile.examples import build_examples
+    from mimicord.compile.persona import compile_persona
+    from mimicord.config import load_config
+    from mimicord.llm.factory import get_provider
+    from mimicord.store import Store
+
+    paths = PersonaPaths.for_persona(name)
+    cfg = load_config(paths.config)
+    if not paths.profile.is_file():
+        typer.echo("no analysis profile yet, run mimicord analyze first")
+        raise typer.Exit(1)
+    if not paths.stats.is_file():
+        typer.echo("no stats yet, run mimicord stats first")
+        raise typer.Exit(1)
+
+    profile = json.loads(paths.profile.read_text(encoding="utf-8"))
+    stats_data = json.loads(paths.stats.read_text(encoding="utf-8"))
+    provider = get_provider(cfg.llm, role="reduce")
+
+    typer.echo("writing persona.md...")
+    persona_text = compile_persona(profile, stats_data, provider, cfg.name)
+    paths.persona_md.write_text(persona_text, encoding="utf-8")
+
+    typer.echo("curating few-shot examples...")
+    with Store(paths.corpus) as store:
+        examples_data = build_examples(store, stats_data, provider, cfg.name, examples)
+    paths.examples.write_text(
+        json.dumps(examples_data, ensure_ascii=False, indent=2), encoding="utf-8"
+    )
+
+    typer.echo(
+        f"wrote {paths.persona_md} and {len(examples_data['examples'])} examples"
+    )
+    typer.echo("eyeball persona.md, then try: mimicord chat " + name)
+
+
+@app.command()
 def run(
     name: str,
     dry_run: bool = typer.Option(
