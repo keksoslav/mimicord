@@ -189,8 +189,64 @@ def stats(name: str) -> None:
     typer.echo(f"\nwrote {paths.stats}")
 
 
+# rough per MTok prices for the cost estimate, input/output
+PRICING_PER_MTOK = {
+    "claude-opus-5": (5.0, 25.0),
+    "claude-sonnet-5": (3.0, 15.0),
+    "claude-haiku-4-5": (1.0, 5.0),
+    "deepseek-chat": (0.27, 1.10),
+    "gpt-4o": (2.50, 10.00),
+}
+
+
+def _cost_lines(paths: "PersonaPaths", cfg) -> list[str]:
+    import json
+
+    prefix_chars = 0
+    if paths.persona_md.is_file():
+        prefix_chars += len(paths.persona_md.read_text(encoding="utf-8"))
+    if paths.examples.is_file():
+        data = json.loads(paths.examples.read_text(encoding="utf-8"))
+        prefix_chars += len(json.dumps(data, ensure_ascii=False))
+    prefix_tokens = prefix_chars // 4  # rough chars-to-tokens
+    live_tokens = 900  # context window + memories, ballpark
+    out_tokens = min(cfg.llm.max_tokens, 150)
+
+    lines = [
+        "",
+        f"cost estimate (rough) for {cfg.llm.provider}/{cfg.llm.model}",
+        f"  cached prompt prefix  ~{prefix_tokens} tokens (persona.md + examples)",
+        f"  per reply             ~{live_tokens} tokens in + ~{out_tokens} out",
+    ]
+    pricing = PRICING_PER_MTOK.get(cfg.llm.model)
+    if cfg.llm.provider == "ollama":
+        lines.append("  local model, free")
+    elif pricing is None:
+        lines.append("  no built-in pricing for this model, check the provider's page")
+    else:
+        p_in, p_out = pricing
+        cold = ((prefix_tokens + live_tokens) * p_in + out_tokens * p_out) / 1e6
+        cached = (prefix_tokens * p_in * 0.1 + live_tokens * p_in + out_tokens * p_out) / 1e6
+        lines.append(f"  first reply           ~${cold:.4f}")
+        if cfg.llm.provider == "anthropic":
+            lines.append(f"  cached replies        ~${cached:.4f} (prefix cache hit)")
+            lines.append(
+                f"  worst case per hour   ~${cached * cfg.discord.max_replies_per_hour:.2f} "
+                f"(cap {cfg.discord.max_replies_per_hour}/h)"
+            )
+        else:
+            lines.append(
+                f"  worst case per hour   ~${cold * cfg.discord.max_replies_per_hour:.2f} "
+                f"(cap {cfg.discord.max_replies_per_hour}/h)"
+            )
+    return lines
+
+
 @app.command()
-def inspect(name: str) -> None:
+def inspect(
+    name: str,
+    cost: bool = typer.Option(False, "--cost", help="estimate per reply cost"),
+) -> None:
     """Show what artifacts exist for a persona."""
     import json
 
@@ -220,6 +276,36 @@ def inspect(name: str) -> None:
     else:
         typer.echo("  examples     missing (mimicord compile)")
     typer.echo(f"  memories     {'ok' if paths.chroma_dir.is_dir() else 'missing (mimicord index)'}")
+    if cost:
+        for line in _cost_lines(paths, cfg):
+            typer.echo(line)
+
+
+@app.command()
+def index(
+    name: str,
+    rebuild: bool = typer.Option(False, "--rebuild", help="drop and rebuild the index"),
+) -> None:
+    """Build the persona's memory index from the corpus (local, free)."""
+    from mimicord.config import load_config
+    from mimicord.rag import build_index
+    from mimicord.store import Store
+
+    paths = PersonaPaths.for_persona(name)
+    cfg = load_config(paths.config)
+    if not paths.corpus.is_file():
+        typer.echo("no corpus yet, run mimicord ingest first")
+        raise typer.Exit(1)
+    typer.echo("indexing (first run downloads a small local embedding model)...")
+    with Store(paths.corpus) as store:
+        total = build_index(
+            paths,
+            cfg.rag,
+            store,
+            rebuild=rebuild,
+            progress=lambda done, all_: typer.echo(f"  {done}/{all_} windows"),
+        )
+    typer.echo(f"indexed {total} conversation windows into {paths.chroma_dir}")
 
 
 @app.command()
