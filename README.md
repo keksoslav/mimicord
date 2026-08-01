@@ -46,6 +46,17 @@ uv run mimicord run janez
 
 You can also skip the whole pipeline: `mimicord new` writes a starter `persona.md` you can edit by hand, and `chat`/`run` work with just that.
 
+## GUI
+
+Everything above also has a desktop app:
+
+```
+uv sync --extra gui
+uv run mimicord gui
+```
+
+Persona list on the left, four tabs on the right: config (TOML editor with validation), pipeline (ingest with file pickers, stats, analyze, compile, index, with a live log), chat (talk to the persona), and bot (start/stop with a dry run toggle and the bot's log). Pipeline steps and the bot run in background threads so the window never freezes. The CLI keeps working the same either way.
+
 ## Getting chat history
 
 Two routes that do not risk anyone's account:
