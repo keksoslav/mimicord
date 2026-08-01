@@ -18,8 +18,11 @@ author_ids = []          # discord user ids as strings, most reliable
 author_names = []        # usernames and nicknames as fallback
 
 [llm]
-provider = "anthropic"   # anthropic | openai | deepseek | ollama
-model = "claude-opus-5"
+# anthropic | openai | deepseek | ollama | claude-code
+# claude-code bills your claude.ai subscription's monthly agent sdk credit
+# through the local Claude Code login instead of an api key
+provider = "anthropic"
+model = "claude-opus-5"  # for claude-code use "sonnet", "opus" or "haiku"
 max_tokens = 400
 # temperature = 1.0      # used by openai/deepseek/ollama, ignored by anthropic
 cache_ttl = "5m"         # anthropic prompt cache ttl: "5m" or "1h"
@@ -39,6 +42,7 @@ always_on_channels = []  # channel ids where the bot replies to everything
 channel_allowlist = []   # empty = all channels
 cooldown_seconds = 45
 max_replies_per_hour = 30
+max_replies_per_month = 0    # hard monthly budget, 0 = unlimited
 context_messages = 25
 ignore_bots = true
 
@@ -219,7 +223,14 @@ def _cost_lines(paths: "PersonaPaths", cfg) -> list[str]:
         f"  per reply             ~{live_tokens} tokens in + ~{out_tokens} out",
     ]
     pricing = PRICING_PER_MTOK.get(cfg.llm.model)
-    if cfg.llm.provider == "ollama":
+    if cfg.llm.provider == "claude-code":
+        lines.append("  billed to your claude.ai plan's monthly agent sdk credit")
+        lines.append("  the credit hard-stops when spent, no surprise charges")
+        if cfg.discord.max_replies_per_month:
+            lines.append(
+                f"  bot budget            {cfg.discord.max_replies_per_month} replies/month"
+            )
+    elif cfg.llm.provider == "ollama":
         lines.append("  local model, free")
     elif pricing is None:
         lines.append("  no built-in pricing for this model, check the provider's page")

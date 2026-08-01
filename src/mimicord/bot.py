@@ -5,11 +5,13 @@ import logging
 import random
 import time
 from collections import defaultdict, deque
+from datetime import datetime, timezone
 
 import discord
 
 from mimicord.engine import ContextMessage, PersonaEngine
 from mimicord.triggers import MessageFacts, TriggerState, should_reply
+from mimicord.usage import UsageLedger
 
 log = logging.getLogger(__name__)
 
@@ -34,6 +36,7 @@ class MimicClient(discord.Client):
         self.style = engine.config.style
         self.dry_run = dry_run
         self.state = TriggerState()
+        self.ledger = UsageLedger(engine.paths.root / "usage.json")
         self.buffers: dict[int, deque[ContextMessage]] = defaultdict(
             lambda: deque(maxlen=self.cfg.context_messages)
         )
@@ -63,7 +66,12 @@ class MimicClient(discord.Client):
             content=content,
         )
         decision, reason = should_reply(
-            facts, self.cfg, self.state, time.monotonic(), random.random()
+            facts,
+            self.cfg,
+            self.state,
+            time.monotonic(),
+            random.random(),
+            monthly_count=self.ledger.count(datetime.now(timezone.utc)),
         )
         if not decision:
             log.debug("skip #%s: %s", message.channel.id, reason)
@@ -75,6 +83,8 @@ class MimicClient(discord.Client):
             return
         async with lock:
             self.state.note_reply(facts.channel_id, time.monotonic())
+            # dry runs still call the llm, so they count against the budget too
+            self.ledger.increment(datetime.now(timezone.utc))
             try:
                 await self._respond(message.channel, reason)
             except Exception:

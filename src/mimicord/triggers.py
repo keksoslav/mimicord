@@ -42,6 +42,7 @@ def should_reply(
     state: TriggerState,
     now: float,
     roll: float,
+    monthly_count: int = 0,
 ) -> tuple[bool, str]:
     """Decide whether to reply. roll is a pre-drawn random in [0, 1).
 
@@ -69,6 +70,8 @@ def should_reply(
     if trigger is None:
         return False, "no trigger"
 
+    if cfg.max_replies_per_month and monthly_count >= cfg.max_replies_per_month:
+        return False, "monthly cap"
     while state.sent_at and now - state.sent_at[0] > 3600:
         state.sent_at.popleft()
     if len(state.sent_at) >= cfg.max_replies_per_hour:

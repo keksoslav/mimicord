@@ -5,13 +5,14 @@ import tomllib
 from dataclasses import dataclass, field
 from pathlib import Path
 
-PROVIDERS = ("anthropic", "openai", "deepseek", "ollama")
+PROVIDERS = ("anthropic", "openai", "deepseek", "ollama", "claude-code")
 
 DEFAULT_MODELS = {
     "anthropic": "claude-opus-5",
     "openai": "gpt-4o",
     "deepseek": "deepseek-chat",
     "ollama": "llama3.1",
+    "claude-code": "sonnet",  # agent sdk accepts aliases and full model ids
 }
 
 
@@ -52,6 +53,7 @@ class DiscordConfig:
     channel_allowlist: list[str] = field(default_factory=list)
     cooldown_seconds: float = 45.0
     max_replies_per_hour: int = 30
+    max_replies_per_month: int = 0  # 0 = no monthly budget
     context_messages: int = 25
     ignore_bots: bool = True
 
@@ -154,6 +156,7 @@ def load_config(path: Path) -> PersonaConfig:
         channel_allowlist=_str_list(discord_data, "channel_allowlist"),
         cooldown_seconds=float(discord_data.get("cooldown_seconds", 45.0)),
         max_replies_per_hour=int(discord_data.get("max_replies_per_hour", 30)),
+        max_replies_per_month=int(discord_data.get("max_replies_per_month", 0)),
         context_messages=int(discord_data.get("context_messages", 25)),
         ignore_bots=bool(discord_data.get("ignore_bots", True)),
     )
