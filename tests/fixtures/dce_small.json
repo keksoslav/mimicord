@@ -1,0 +1,13 @@
+{
+  "guild": {"id": "1", "name": "Test Server"},
+  "channel": {"id": "999", "type": "GuildTextChat", "name": "general", "topic": null},
+  "messages": [
+    {"id": "1001", "type": "Default", "timestamp": "2024-03-01T18:00:00.000+02:00", "content": "a gres jutri na pivo", "author": {"id": "222", "name": "miha", "nickname": "Miha"}, "attachments": []},
+    {"id": "1002", "type": "Default", "timestamp": "2024-03-01T18:00:20.000+02:00", "content": "ne", "author": {"id": "111", "name": "janez123", "nickname": "Janez K."}, "attachments": []},
+    {"id": "1003", "type": "Default", "timestamp": "2024-03-01T18:00:35.000+02:00", "content": "mam kolokvij", "author": {"id": "111", "name": "janez123", "nickname": "Janez K."}, "attachments": []},
+    {"id": "1004", "type": "Reply", "timestamp": "2024-03-01T18:01:00.000+02:00", "content": "klasika", "author": {"id": "222", "name": "miha", "nickname": "Miha"}, "attachments": [], "reference": {"messageId": "1002", "channelId": "999", "guildId": "1"}},
+    {"id": "1005", "type": "Default", "timestamp": "2024-03-01T18:02:00.000+02:00", "content": "ma sej bo", "author": {"id": "111", "name": "janez123", "nickname": "Janez K."}, "attachments": []},
+    {"id": "1006", "type": "ChannelPinnedMessage", "timestamp": "2024-03-01T18:03:00.000+02:00", "content": "", "author": {"id": "222", "name": "miha", "nickname": "Miha"}, "attachments": []},
+    {"id": "1007", "type": "Default", "timestamp": "2024-03-01T18:04:00.000+02:00", "content": "", "author": {"id": "222", "name": "miha", "nickname": "Miha"}, "attachments": [{"id": "a1", "url": "https://cdn.discordapp.com/attachments/x.png", "fileName": "x.png"}]}
+  ]
+}
