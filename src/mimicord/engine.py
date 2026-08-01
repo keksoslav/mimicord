@@ -82,7 +82,10 @@ class PersonaEngine:
         transcript = "\n".join(f"{m.author}: {m.content}" for m in context)
         sections: list[str] = []
         if self.rag is not None:
-            memories = self.rag.query(transcript)
+            # query with just the tail of the conversation, that is what the
+            # reply will actually be about
+            query_text = "\n".join(f"{m.author}: {m.content}" for m in context[-5:])
+            memories = self.rag.query(query_text)
             if memories:
                 lines = "\n".join(f"- {m}" for m in memories)
                 sections.append(f"[memories]\n{lines}\n[/memories]")
