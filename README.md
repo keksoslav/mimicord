@@ -84,6 +84,19 @@ Drop the file in `personas/janez/media/`. Tenor links work as `url = "..."` inst
 
 The `when` line is what the model reads to decide, so be specific there.
 
+He can also start conversations instead of only answering them:
+
+```toml
+idle_hours = 24
+idle_channels = ["123456789"]
+```
+
+If nobody has said anything in that channel for a day, he picks someone who was
+talking there recently, pings them and says something. Leave `idle_channels` out
+and it falls back to `always_on_channels`. It counts against the same hourly and
+monthly caps as a normal reply, and the clock is wall clock, so restarting the
+bot halfway through a quiet weekend does not reset it. Off by default.
+
 ## Cost
 
 Compiling costs maybe a euro. After that it's per reply.

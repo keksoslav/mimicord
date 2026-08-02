@@ -36,6 +36,19 @@ def _keyword_hit(content: str, keywords: list[str]) -> bool:
     return any(re.search(rf"\b{re.escape(k)}\b", lowered) for k in keywords)
 
 
+def _over_budget(
+    cfg: DiscordConfig, state: TriggerState, now: float, monthly_count: int
+) -> str | None:
+    """Why this send is out of budget, or None when there is room for it."""
+    if cfg.max_replies_per_month and monthly_count >= cfg.max_replies_per_month:
+        return "monthly cap"
+    while state.sent_at and now - state.sent_at[0] > 3600:
+        state.sent_at.popleft()
+    if len(state.sent_at) >= cfg.max_replies_per_hour:
+        return "hourly cap"
+    return None
+
+
 def should_reply(
     facts: MessageFacts,
     cfg: DiscordConfig,
@@ -70,13 +83,36 @@ def should_reply(
     if trigger is None:
         return False, "no trigger"
 
-    if cfg.max_replies_per_month and monthly_count >= cfg.max_replies_per_month:
-        return False, "monthly cap"
-    while state.sent_at and now - state.sent_at[0] > 3600:
-        state.sent_at.popleft()
-    if len(state.sent_at) >= cfg.max_replies_per_hour:
-        return False, "hourly cap"
+    over = _over_budget(cfg, state, now, monthly_count)
+    if over:
+        return False, over
     last = state.last_reply_at.get(facts.channel_id)
     if last is not None and now - last < cfg.cooldown_seconds:
         return False, "cooldown"
     return True, trigger
+
+
+def should_poke(
+    channel_id: str,
+    cfg: DiscordConfig,
+    state: TriggerState,
+    now: float,
+    idle_seconds: float,
+    monthly_count: int = 0,
+) -> tuple[bool, str]:
+    """Decide whether to break the silence in a channel nobody is using.
+
+    idle_seconds is wall clock time since the last message there, not
+    monotonic, so a restart part way through a quiet stretch still counts
+    the hours that already went by.
+    """
+    if cfg.idle_hours <= 0:
+        return False, "idle pokes off"
+    if channel_id not in cfg.poke_channels():
+        return False, "channel is not poked"
+    if idle_seconds < cfg.idle_hours * 3600:
+        return False, "not quiet long enough"
+    over = _over_budget(cfg, state, now, monthly_count)
+    if over:
+        return False, over
+    return True, "idle"

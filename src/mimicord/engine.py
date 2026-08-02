@@ -173,7 +173,9 @@ class PersonaEngine:
             return None
         return Memories(self.paths, self.config.rag)
 
-    def reply(self, context: list[ContextMessage]) -> list[str]:
+    def reply(self, context: list[ContextMessage], direction: str = "") -> list[str]:
+        """Answer the recent chat. direction is an out of character nudge for
+        the times nobody said anything to answer, like breaking a silence."""
         transcript = "\n".join(f"{m.author}: {m.content}" for m in context)
         sections: list[str] = []
         if self.rag is not None:
@@ -186,6 +188,8 @@ class PersonaEngine:
                 lines = "\n".join(f"- {m}" for m in memories)
                 sections.append(f"[memories]\n{lines}\n[/memories]")
         sections.append(f"[chat]\n{transcript}\n[/chat]")
+        if direction:
+            sections.append(f"[direction]\n{direction}\n[/direction]")
         messages = [*self.examples, ChatMessage("user", "\n".join(sections))]
         self.last_prompt = (self.system, messages)
         raw = self.provider.complete(
