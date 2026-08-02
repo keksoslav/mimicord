@@ -161,8 +161,8 @@ def test_compile_persona_appends_code_sections(fake_provider):
     text = compile_persona({"tone": ["dry"]}, stats, fake_provider, "janez")
     assert text.startswith("# Persona: janez")
     assert "## Formatting habits (measured)" in text
-    assert "## Never do" in text
-    assert "never sound like an assistant" in text
+    assert "## Rules" in text
+    assert "not an assistant" in text
 
 
 def test_candidate_pairs_from_fixture(corpus):

@@ -6,7 +6,7 @@ import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from mimicord import postprocess
+from mimicord import postprocess, rules
 from mimicord.config import PersonaConfig, load_config
 from mimicord.llm.base import ChatMessage, Provider
 from mimicord.llm.factory import get_provider
@@ -115,7 +115,8 @@ class PersonaEngine:
             raise FileNotFoundError(
                 f"{self.paths.persona_md} missing; write one by hand or run mimicord compile"
             )
-        self.system = self.paths.persona_md.read_text(encoding="utf-8").strip()
+        persona = self.paths.persona_md.read_text(encoding="utf-8").strip()
+        self.system = rules.strip_rules(persona)
         # things the chat logs could never reveal, like his own full name
         if self.paths.extra.is_file():
             extra = self.paths.extra.read_text(encoding="utf-8").strip()
@@ -124,6 +125,9 @@ class PersonaEngine:
         reactions = self._reaction_block()
         if reactions:
             self.system = f"{self.system}\n\n{reactions}"
+        # last, always: whatever the model reads most recently carries the most
+        # weight, and these are the lines that must not bend
+        self.system = f"{self.system}\n\n{rules.HARD_RULES}"
         self.examples = self._load_examples()
         self.stats = self._load_json(self.paths.stats)
         self.provider: Provider = get_provider(self.config.llm)
