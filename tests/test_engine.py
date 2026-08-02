@@ -84,3 +84,25 @@ def test_works_without_examples(persona_dir, fake_provider):
     engine = make_engine(persona_dir, fake_provider, with_examples=False)
     engine.reply([ContextMessage("you", "hej")])
     assert len(fake_provider.calls[0]["messages"]) == 1
+
+
+def test_extra_facts_are_appended_to_the_system_prompt(persona_dir, fake_provider):
+    """Things the chat logs cannot reveal, like the persona's own full name."""
+    persona_dir.joinpath("extra.md").write_text(
+        "## Facts\n- your name is Timotej", encoding="utf-8"
+    )
+    engine = make_engine(persona_dir, fake_provider, with_examples=False)
+    assert engine.system.startswith("# Persona: testbot")
+    assert engine.system.endswith("- your name is Timotej")
+
+
+def test_extra_facts_are_optional(persona_dir, fake_provider):
+    engine = make_engine(persona_dir, fake_provider, with_examples=False)
+    assert "Facts" not in engine.system
+
+
+def test_empty_extra_file_adds_nothing(persona_dir, fake_provider):
+    persona_dir.joinpath("extra.md").write_text("   \n", encoding="utf-8")
+    engine = make_engine(persona_dir, fake_provider, with_examples=False)
+    assert engine.system == engine.system.strip()
+    assert not engine.system.endswith("\n")

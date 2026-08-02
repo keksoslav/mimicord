@@ -92,6 +92,11 @@ class PersonaEngine:
                 f"{self.paths.persona_md} missing; write one by hand or run mimicord compile"
             )
         self.system = self.paths.persona_md.read_text(encoding="utf-8").strip()
+        # things the chat logs could never reveal, like his own full name
+        if self.paths.extra.is_file():
+            extra = self.paths.extra.read_text(encoding="utf-8").strip()
+            if extra:
+                self.system = f"{self.system}\n\n{extra}"
         self.examples = self._load_examples()
         self.stats = self._load_json(self.paths.stats)
         self.provider: Provider = get_provider(self.config.llm)

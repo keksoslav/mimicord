@@ -49,6 +49,12 @@ class PersonaPaths:
         return self.root / "persona.md"
 
     @property
+    def extra(self) -> Path:
+        """Hand-written facts appended to the compiled prompt. Never
+        generated, so recompiling the persona does not wipe them."""
+        return self.root / "extra.md"
+
+    @property
     def examples(self) -> Path:
         return self.root / "examples.json"
 

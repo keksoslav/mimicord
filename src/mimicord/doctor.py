@@ -54,6 +54,12 @@ def check_artifacts(paths: PersonaPaths, cfg: PersonaConfig) -> list[Check]:
         detail = "missing, mimicord compile"
     checks.append(Check("persona.md", persona_ok, detail))
 
+    if paths.extra.is_file():
+        chars = len(paths.extra.read_text(encoding="utf-8").strip())
+        checks.append(Check("extra.md", True, f"{chars} chars of hand-written facts"))
+    else:
+        checks.append(Check("extra.md", None, "none, optional"))
+
     if paths.examples.is_file():
         import json
 
