@@ -97,6 +97,12 @@ and it falls back to `always_on_channels`. It counts against the same hourly and
 monthly caps as a normal reply, and the clock is wall clock, so restarting the
 bot halfway through a quiet weekend does not reset it. Off by default.
 
+Someone in your server will eventually try to break him by pasting the same line
+twenty times. Repeats get ignored, and a burst of messages gets one reply instead
+of one each, because he waits `debounce_seconds` for you to finish typing before
+he answers. He also will not send the same message twice in a row, which is the
+thing that makes a bot look like a bot.
+
 ## Cost
 
 Compiling costs maybe a euro. After that it's per reply.

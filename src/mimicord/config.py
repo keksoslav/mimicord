@@ -52,6 +52,9 @@ class DiscordConfig:
     always_on_channels: list[str] = field(default_factory=list)
     channel_allowlist: list[str] = field(default_factory=list)
     cooldown_seconds: float = 45.0
+    # let a burst of messages finish before answering, so three lines typed in
+    # a row get one reply instead of three
+    debounce_seconds: float = 2.5
     max_replies_per_hour: int = 30
     max_replies_per_month: int = 0  # 0 = no monthly budget
     context_messages: int = 25
@@ -181,6 +184,7 @@ def load_config(path: Path) -> PersonaConfig:
         always_on_channels=_str_list(discord_data, "always_on_channels"),
         channel_allowlist=_str_list(discord_data, "channel_allowlist"),
         cooldown_seconds=float(discord_data.get("cooldown_seconds", 45.0)),
+        debounce_seconds=float(discord_data.get("debounce_seconds", 2.5)),
         max_replies_per_hour=int(discord_data.get("max_replies_per_hour", 30)),
         max_replies_per_month=int(discord_data.get("max_replies_per_month", 0)),
         context_messages=int(discord_data.get("context_messages", 25)),
@@ -188,6 +192,8 @@ def load_config(path: Path) -> PersonaConfig:
         idle_hours=float(discord_data.get("idle_hours", 0.0)),
         idle_channels=_str_list(discord_data, "idle_channels"),
     )
+    if discord.debounce_seconds < 0:
+        raise ConfigError("discord.debounce_seconds cannot be negative")
     if discord.idle_hours < 0:
         raise ConfigError("discord.idle_hours cannot be negative")
     if discord.idle_hours and not discord.poke_channels():

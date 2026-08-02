@@ -17,6 +17,9 @@ class MessageFacts:
     mentions_bot: bool
     replies_to_bot: bool
     content: str
+    # this exact line was already sent here recently, so someone is either
+    # spamming or trying to bait a reply out of the bot
+    repeats_recent: bool = False
 
 
 @dataclass
@@ -66,6 +69,10 @@ def should_reply(
         return False, "own message"
     if facts.author_is_bot and cfg.ignore_bots:
         return False, "bot author"
+    if facts.repeats_recent:
+        # answering a flood costs a reply per copy and looks broken, since the
+        # same input tends to produce the same output
+        return False, "repeated message"
     if cfg.channel_allowlist and facts.channel_id not in cfg.channel_allowlist:
         return False, "channel not in allowlist"
 
