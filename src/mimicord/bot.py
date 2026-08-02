@@ -133,6 +133,9 @@ class MimicClient(discord.Client):
             return
         log.info("replying in #%s (%s)", channel.id, reason)
         bursts = await asyncio.to_thread(self.engine.reply, context)
+        if not bursts:
+            log.warning("nothing to say in #%s, staying quiet", channel.id)
+            return
         persona = self.engine.config.name
         for burst in bursts:
             if self.dry_run:
