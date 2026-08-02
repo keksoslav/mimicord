@@ -1,128 +1,116 @@
 # mimicord
 
-Build Discord bots that talk like a real person. Feed it chat exports, it compiles a persona (style prompt, real example exchanges, measured writing stats, RAG memory over the full history) and runs a bot that replies in that person's voice.
+Makes a Discord bot that talks like one of your mates. You give it their chat history, it works out how they write, and then it sits in your server replying like them.
 
-Works with Anthropic Claude, OpenAI, DeepSeek, or a local Ollama model, picked per persona. All chat data stays on your machine; only prompt-sized excerpts go to the provider you choose.
+About 3000 of their messages is enough. The bot picks up the small stuff, whether they capitalise, whether they end sentences with a full stop, which slang they use, whether they fire off three short messages instead of one long one. That last one is what actually sells it.
 
-## How it works
+## Setup
 
-```
-chat exports ──> ingest ──> corpus.db (sqlite)
-                              │
-                              ├─ stats    deterministic style numbers (free)
-                              ├─ analyze  LLM style analysis, map-reduce over chunks
-                              ├─ compile  persona.md + few-shot examples.json
-                              └─ index    local embedding index of the history (free)
-                                            │
-                              chat (terminal REPL) / run (Discord bot)
-```
-
-The bot keeps a rolling context of the channel, retrieves a few real conversation snippets from the index, and asks the model for a reply in character. Replies get post-processed to match measured habits: lowercase starts, dropped periods, split into short message bursts, AI phrasing stripped.
-
-## Quickstart
-
-Requires Python 3.11+ and [uv](https://docs.astral.sh/uv/).
+You need Python 3.11+ and [uv](https://docs.astral.sh/uv/).
 
 ```
 git clone https://github.com/keksoslav/mimicord
 cd mimicord
 uv sync
-cp .env.example .env       # fill in the keys you use
+cp .env.example .env
 uv run mimicord new janez
 ```
 
-Edit `personas/janez/persona.toml` (target author ids, provider, token env var), then:
+Open `personas/janez/persona.toml` and fill in who you're copying (their Discord user id) and which model to use. Then run the pipeline:
 
 ```
-uv run mimicord ingest janez --dce path/to/export.json --package path/to/package
+uv run mimicord ingest janez --dce "path/to/exports"
 uv run mimicord stats janez
-uv run mimicord analyze janez
+uv run mimicord analyze janez     # this one takes a while
 uv run mimicord compile janez
 uv run mimicord index janez
-uv run mimicord chat janez        # try the voice in your terminal first
-uv run mimicord run janez --dry-run
-uv run mimicord run janez
 ```
 
-You can also skip the whole pipeline: `mimicord new` writes a starter `persona.md` you can edit by hand, and `chat`/`run` work with just that.
+`analyze` is the slow bit, it reads through the chat history in chunks and asks the model what this person is like. Half an hour for a big corpus. It caches as it goes so you can ctrl-c and pick it up later.
 
-## GUI
-
-Everything above also has a desktop app:
+Then read `personas/janez/persona.md`. That file is the whole personality and it's worth actually reading, it's usually a bit uncanny. If it looks right:
 
 ```
-uv sync --extra gui
-uv run mimicord gui
+uv run mimicord chat janez        # talk to them in your terminal
+uv run mimicord run janez         # put them in Discord
 ```
 
-Persona list on the left, four tabs on the right: config (TOML editor with validation), pipeline (ingest with file pickers, stats, analyze, compile, index, with a live log), chat (talk to the persona), and bot (start/stop with a dry run toggle and the bot's log). Pipeline steps and the bot run in background threads so the window never freezes. The CLI keeps working the same either way.
+There's also a GUI (`uv sync --extra gui` then `mimicord gui`) if you'd rather click through it. Same thing, buttons instead of commands.
 
-## Getting chat history
+You don't have to do any of the pipeline stuff, by the way. `mimicord new` writes a blank persona file you can just write by hand, and chat/run work fine with that.
 
-Two routes that do not risk anyone's account:
+## Getting the chat history
 
-- **Official data package.** Discord Settings > Privacy and Safety > Request all of my data. Takes a few days, contains only your own messages. Ingest with `--package path/to/package`.
-- **DiscordChatExporter with a bot token.** Invite your own bot (below) to your server, then export channels with [DiscordChatExporter](https://github.com/Tyrrrz/DiscordChatExporter) using the bot's token and JSON format. This captures everyone's messages with full context, which makes for much better personas. Ingest with `--dce path/to/export.json` (repeatable, directories work too).
+This is the annoying part.
 
-**Warning:** running DiscordChatExporter with your personal user token violates Discord's terms of service, and since early 2026 Discord actively enforces this (forced logouts, warnings, possible termination). mimicord never asks for a user token.
+The easy option is your own data export: Discord Settings, Privacy and Safety, Request all of my data. Takes a few days to arrive. Problem is it only has *your* messages, none of the replies, so it's not much use if you're copying someone else.
 
-## Creating the bot account
+The better option is [DiscordChatExporter](https://github.com/Tyrrrz/DiscordChatExporter) pointed at a channel, exported as JSON. That gets everyone, with context, which makes a much better persona.
 
-1. [Discord Developer Portal](https://discord.com/developers/applications) > New Application, name it after the persona.
-2. Bot page: enable **Message Content Intent** under Privileged Gateway Intents. If you skip this the bot fails at login with a privileged intents error. If you instead removed the intent from the code, every message would silently arrive empty.
-3. Copy the bot token into `.env` under the name you set as `token_env`.
-4. OAuth2 > URL Generator: scope `bot`, permissions View Channels, Send Messages, Read Message History. Open the URL and invite the bot to your server.
+One warning. DCE will happily take your personal account token, and that's automating a user account, which is against Discord's ToS. They started actually enforcing it in early 2026 and people got logged out and warned. Use a bot token instead. mimicord itself never touches user tokens.
 
-Test in a private server first. `--dry-run` connects and listens but prints replies to stdout instead of sending.
+## The bot account
 
-## Configuration
+Go to the [developer portal](https://discord.com/developers/applications), new application, then Bot.
 
-Everything lives in `personas/<name>/persona.toml`. The important knobs:
+**Turn on Message Content Intent.** It's under Privileged Gateway Intents. If you forget, the bot connects fine and then just ignores everything, because every message arrives with empty content and there's nothing to reply to. Took me a while to work that one out.
 
-| key | what it does |
-| --- | --- |
-| `target.author_ids` | Discord user ids whose messages define the persona (most reliable) |
-| `llm.provider` / `llm.model` | `anthropic`, `openai`, `deepseek`, `ollama` and the model id |
-| `llm.analyze.model` | optional cheaper model for the per chunk analysis step |
-| `discord.token_env` | env var holding the bot token |
-| `discord.trigger_*` | mention, reply, keywords, random interject probability, always-on channels |
-| `discord.cooldown_seconds` / `max_replies_per_hour` | the cost and spam safety net |
-| `rag.enabled` | memory retrieval on or off |
-| `style.max_burst` | max messages per reply |
+Permissions: View Channels, Send Messages, Read Message History. Nothing else. Then invite it and run:
 
-## Providers and cost
+```
+uv run mimicord doctor janez
+```
 
-| provider | notes |
-| --- | --- |
-| anthropic | default `claude-opus-5`; the persona prompt and few-shots are prompt-cached, which cuts input cost by roughly 90% on consecutive replies |
-| claude-code | bills your claude.ai subscription instead of an API key, see below |
-| openai | `gpt-4o` default, set any model you have access to |
-| deepseek | cheap, OpenAI-compatible API |
-| ollama | free and local; lower `context_messages` and example count for small context models |
+which checks the token, the intent, and whether it's actually in a server, so you find out now rather than halfway through wondering why nothing happens.
 
-### Using a claude.ai subscription (no API key)
+Test with `--dry-run` first. It connects and listens for real but prints replies to the terminal instead of posting them.
 
-Pro and Max plans include a monthly Agent SDK credit ($20 Pro, $100 Max 5x, $200 Max 20x) that covers third-party apps built on the Claude Agent SDK. Set `provider = "claude-code"` and `model = "sonnet"` (or `opus`/`haiku`) and mimicord routes replies through your local Claude Code login, drawing from that credit instead of API billing. Requirements: Claude Code installed and signed in on the machine running the bot.
+## Making it better
 
-Two properties make this the relaxed option: the credit hard-stops when spent (no surprise charges unless you explicitly enable extra usage credits on your account), and it is a separate pool from your chat and Claude Code limits. For an extra belt, set `max_replies_per_month` in persona.toml; the bot tracks its own reply count in `usage.json` and goes quiet when the budget is reached, resetting monthly. Replies are a bit slower than the raw API because each one runs through the Claude Code harness, which the typing simulation hides well.
+The compiled persona is a decent start but it can't know things people never say in chat. Nobody types their own surname in their group chat, so the bot won't know it.
 
-Do not point the regular `anthropic` provider at a claude.ai OAuth token; that violates the consumer terms. The `claude-code` provider is the supported route.
+Put that stuff in `personas/janez/extra.md`. It gets stuck on the end of the prompt and, unlike `persona.md`, recompiling doesn't wipe it. Full name, age, job, family, whatever. Also good for fixing habits you don't like, mine kept opening every message with my name until I told it not to.
 
-Compiling a persona from a ~20k message corpus costs well under a dollar with a cheap analyze model (`claude-haiku-4-5`) and is a one-time cost. Replies are roughly a cent each on `claude-opus-5` with caching, a fifth of that on `claude-haiku-4-5`, free on Ollama. `mimicord inspect <name> --cost` prints an estimate for your actual persona, and the hourly reply cap bounds the worst case.
+You can give them reaction gifs too:
 
-## Rules of the road
+```toml
+[[reactions]]
+name = "angry"
+file = "angry.gif"
+when = "Lev winds you up or is being mean"
+```
 
-- The bot runs on a real bot account and is always labeled BOT. Self-bots (automating a user account) are against Discord ToS; mimicord never does that.
-- Mimicking a friend? Ask them first, and tell the server. A persona bot is a party trick, not a disguise.
-- Chat exports and everything compiled from them stay in `personas/`, which is gitignored. Prompt-sized excerpts (persona prompt, examples, retrieved memories, recent context) are sent to the LLM provider you configured, nothing else leaves the machine.
+Drop the file in `personas/janez/media/`. Tenor links work as `url = "..."` instead, which is better for those since Discord embeds them and they don't expire like CDN attachment links do.
 
-## Development
+The `when` line is what the model reads to decide, so be specific there.
+
+## Cost
+
+Compiling costs maybe a euro. After that it's per reply.
+
+If you have a Claude Pro or Max subscription you can use it directly, no API key, set `provider = "claude-code"`. Your plan includes a monthly Agent SDK credit ($20 / $100 / $200 depending on tier) and this draws from that. When it runs out it just stops, it can't overcharge you unless you've specifically turned on extra usage credits.
+
+Opus works out around 7 cents a reply through that, so a couple of thousand replies a month on the top tier. Sonnet is cheaper and mostly fine, though if the person you're copying doesn't write in English then opus is noticeably better at it.
+
+Otherwise: `anthropic` with an API key is cheaper per reply (no harness overhead), `deepseek` is cheapest, `ollama` is free if you're happy running it locally.
+
+`mimicord inspect janez --cost` gives you an estimate. There's also `max_replies_per_hour` and `max_replies_per_month` in the config so it can't run away with your money while you're asleep.
+
+## Don't be a dick about it
+
+Ask the person first. Obviously.
+
+Also tell the rest of the server. A bot with the BOT tag next to it is a joke everyone's in on, which is the fun bit. An account pretending to be a real person isn't, and it always comes out eventually.
+
+Their messages stay on your machine. `personas/` is gitignored. The only thing that leaves is the prompt itself going to whichever model you picked.
+
+## Tests
 
 ```
 uv run pytest
 ```
 
-Tests cover both export formats, dedup, trigger logic, prompt assembly stability, the JSON repair path, and retrieval, all against fixtures and fake providers. No network or API keys needed.
+All offline, no API keys needed.
 
 ## License
 
