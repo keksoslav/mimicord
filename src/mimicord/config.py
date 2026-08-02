@@ -56,6 +56,16 @@ class DiscordConfig:
     max_replies_per_month: int = 0  # 0 = no monthly budget
     context_messages: int = 25
     ignore_bots: bool = True
+    idle_hours: float = 0.0  # 0 = never break the silence
+    idle_channels: list[str] = field(default_factory=list)
+
+    def poke_channels(self) -> list[str]:
+        """Where to speak up when it goes quiet.
+
+        Falls back to always_on_channels, since a channel he already talks
+        freely in is the one where an unprompted message reads as normal.
+        """
+        return self.idle_channels or self.always_on_channels
 
     def token(self) -> str:
         if not self.token_env:
@@ -175,7 +185,15 @@ def load_config(path: Path) -> PersonaConfig:
         max_replies_per_month=int(discord_data.get("max_replies_per_month", 0)),
         context_messages=int(discord_data.get("context_messages", 25)),
         ignore_bots=bool(discord_data.get("ignore_bots", True)),
+        idle_hours=float(discord_data.get("idle_hours", 0.0)),
+        idle_channels=_str_list(discord_data, "idle_channels"),
     )
+    if discord.idle_hours < 0:
+        raise ConfigError("discord.idle_hours cannot be negative")
+    if discord.idle_hours and not discord.poke_channels():
+        raise ConfigError(
+            "discord.idle_hours needs idle_channels, or always_on_channels to fall back on"
+        )
 
     rag_data = _table(data, "rag")
     rag = RagConfig(
