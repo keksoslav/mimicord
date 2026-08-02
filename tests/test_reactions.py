@@ -41,10 +41,36 @@ def test_no_reactions_by_default(tmp_path):
     assert load_config(write(tmp_path, 'name = "x"\n')).reactions == []
 
 
-def test_reaction_needs_name_and_file(tmp_path):
+def test_reaction_needs_a_source(tmp_path):
     text = 'name = "x"\n[[reactions]]\nname = "angry"\n'
-    with pytest.raises(ConfigError, match="name and a file"):
+    with pytest.raises(ConfigError, match="exactly one of file or url"):
         load_config(write(tmp_path, text))
+
+
+def test_reaction_cannot_have_both_sources(tmp_path):
+    text = (
+        'name = "x"\n[[reactions]]\nname = "a"\n'
+        'file = "a.gif"\nurl = "https://tenor.com/view/x"\n'
+    )
+    with pytest.raises(ConfigError, match="exactly one of file or url"):
+        load_config(write(tmp_path, text))
+
+
+def test_reaction_url_must_be_http(tmp_path):
+    text = 'name = "x"\n[[reactions]]\nname = "a"\nurl = "tenor.com/view/x"\n'
+    with pytest.raises(ConfigError, match="http or https"):
+        load_config(write(tmp_path, text))
+
+
+def test_url_reaction_parsed(tmp_path):
+    text = (
+        'name = "x"\n[[reactions]]\nname = "dedi"\n'
+        'url = "https://tenor.com/view/x"\nwhen = "mocking someone"\n'
+    )
+    reaction = load_config(write(tmp_path, text)).reactions[0]
+    assert reaction.url == "https://tenor.com/view/x"
+    assert reaction.file == ""
+    assert reaction.when == "mocking someone"
 
 
 def test_duplicate_reaction_names_rejected(tmp_path):
@@ -99,9 +125,10 @@ def test_engine_advertises_reactions_and_resolves_paths(personas_home, fake_prov
     engine = PersonaEngine("testbot", rag_enabled=False)
     assert "[gif:angry] Lev is mean to you" in engine.system
     assert "[gif:shrug]" in engine.system
-    assert engine.reaction_path("angry") == PersonaPaths(root).media_dir / "angry.gif"
-    assert engine.reaction_path("ANGRY") is not None  # case insensitive
-    assert engine.reaction_path("nope") is None
+    angry = engine.find_reaction("angry")
+    assert engine.reaction_path(angry) == PersonaPaths(root).media_dir / "angry.gif"
+    assert engine.find_reaction("ANGRY") is not None  # case insensitive
+    assert engine.find_reaction("nope") is None
 
 
 def test_engine_without_reactions_adds_no_block(persona_dir, fake_provider):

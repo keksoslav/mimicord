@@ -140,19 +140,30 @@ class MimicClient(discord.Client):
         persona = self.engine.config.name
         for burst in bursts:
             name = postprocess.reaction_name(burst)
-            path = self.engine.reaction_path(name) if name else None
-            if name and (path is None or not path.is_file()):
+            reaction = self.engine.find_reaction(name) if name else None
+            path = None
+            if reaction is not None and reaction.file:
+                path = self.engine.reaction_path(reaction)
+                if not path.is_file():
+                    reaction = None
+            if name and reaction is None:
                 # never post a raw tag, it breaks the illusion worse than silence
-                log.warning("reaction %r has no file at %s, dropping", name, path)
+                log.warning("reaction %r is unusable, dropping", name)
                 continue
 
             if self.dry_run:
-                what = f"<sends {path.name}>" if path else burst
+                if reaction is not None:
+                    what = f"<sends {reaction.file or reaction.url}>"
+                else:
+                    what = burst
                 log.info("[dry run #%s] %s: %s", channel, persona, what)
-            elif path is not None:
+            elif reaction is not None:
                 async with channel.typing():
                     await asyncio.sleep(random.uniform(0.8, 1.6))
-                await channel.send(file=discord.File(path))
+                if path is not None:
+                    await channel.send(file=discord.File(path))
+                else:
+                    await channel.send(reaction.url)
                 await asyncio.sleep(random.uniform(0.5, 1.5))
             else:
                 async with channel.typing():

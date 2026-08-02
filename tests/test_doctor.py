@@ -133,3 +133,35 @@ def test_discord_check_offers_invite_when_in_no_servers(tmp_path, monkeypatch):
 
 async def _immediate(value):
     return value
+
+
+def test_oversized_reaction_is_flagged(personas_home):
+    """Discord rejects attachments over 10 MB; catch it before runtime."""
+    from mimicord.doctor import DISCORD_UPLOAD_LIMIT
+
+    root = personas_home / "big"
+    (root / "media").mkdir(parents=True)
+    (root / "persona.toml").write_text(
+        'name = "big"\n[llm]\nprovider = "ollama"\n'
+        '[[reactions]]\nname = "huge"\nfile = "huge.gif"\n',
+        encoding="utf-8",
+    )
+    (root / "media" / "huge.gif").write_bytes(b"\0" * (DISCORD_UPLOAD_LIMIT + 1))
+    paths = PersonaPaths.for_persona("big")
+    checks = by_name(check_artifacts(paths, load_config(paths.config)))
+    assert checks["reaction huge"].ok is False
+    assert "10 MB" in checks["reaction huge"].detail
+
+
+def test_url_reaction_needs_no_file(personas_home):
+    root = personas_home / "urlbot"
+    root.mkdir()
+    (root / "persona.toml").write_text(
+        'name = "urlbot"\n[llm]\nprovider = "ollama"\n'
+        '[[reactions]]\nname = "dedi"\nurl = "https://tenor.com/view/x"\n',
+        encoding="utf-8",
+    )
+    paths = PersonaPaths.for_persona("urlbot")
+    checks = by_name(check_artifacts(paths, load_config(paths.config)))
+    assert checks["reaction dedi"].ok is True
+    assert checks["reaction dedi"].detail == "url"

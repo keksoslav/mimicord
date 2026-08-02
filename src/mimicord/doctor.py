@@ -10,6 +10,9 @@ from mimicord.paths import PersonaPaths
 # view channels + send messages + read message history, nothing more
 INVITE_PERMISSIONS = 68608
 
+# what a bot can attach without nitro
+DISCORD_UPLOAD_LIMIT = 10 * 1024 * 1024
+
 
 @dataclass
 class Check:
@@ -70,13 +73,21 @@ def check_artifacts(paths: PersonaPaths, cfg: PersonaConfig) -> list[Check]:
         checks.append(Check("few-shots", None, "none, mimicord compile"))
 
     for reaction in cfg.reactions:
+        if reaction.url:
+            checks.append(Check(f"reaction {reaction.name}", True, "url"))
+            continue
         path = paths.media_dir / reaction.file
+        if not path.is_file():
+            checks.append(Check(f"reaction {reaction.name}", False, str(path)))
+            continue
+        size = path.stat().st_size
+        detail = f"{size // 1024} KB"
+        if size > DISCORD_UPLOAD_LIMIT:
+            detail += " (over discord's 10 MB limit, the upload will fail)"
+        elif size > DISCORD_UPLOAD_LIMIT * 0.8:
+            detail += " (close to discord's 10 MB limit)"
         checks.append(
-            Check(
-                f"reaction {reaction.name}",
-                path.is_file(),
-                str(path) if not path.is_file() else f"{path.stat().st_size // 1024} KB",
-            )
+            Check(f"reaction {reaction.name}", size <= DISCORD_UPLOAD_LIMIT, detail)
         )
 
     if cfg.rag.enabled:

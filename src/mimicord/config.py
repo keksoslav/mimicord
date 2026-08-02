@@ -82,11 +82,17 @@ class StyleConfig:
 
 @dataclass
 class Reaction:
-    """An image the persona can send instead of typing, by emitting a tag."""
+    """An image the persona can send instead of typing, by emitting a tag.
+
+    Either a file uploaded from media/, or a url posted as text. Tenor and
+    similar links are better as urls: discord embeds them natively and they
+    do not carry the expiring signature that cdn attachment links do.
+    """
 
     name: str
-    file: str
     when: str = ""
+    file: str = ""
+    url: str = ""
 
 
 @dataclass
@@ -195,8 +201,15 @@ def load_config(path: Path) -> PersonaConfig:
             raise ConfigError("each [[reactions]] entry must be a table")
         r_name = str(entry.get("name", "")).strip().lower()
         r_file = str(entry.get("file", "")).strip()
-        if not r_name or not r_file:
-            raise ConfigError("every [[reactions]] entry needs a name and a file")
+        r_url = str(entry.get("url", "")).strip()
+        if not r_name:
+            raise ConfigError("every [[reactions]] entry needs a name")
+        if bool(r_file) == bool(r_url):
+            raise ConfigError(
+                f"reaction {r_name!r} needs exactly one of file or url"
+            )
+        if r_url and not r_url.startswith(("http://", "https://")):
+            raise ConfigError(f"reaction {r_name!r} url must be http or https")
         if not r_name.replace("_", "").replace("-", "").isalnum():
             raise ConfigError(
                 f"reaction name {r_name!r} must be letters, digits, _ or -"
@@ -204,7 +217,14 @@ def load_config(path: Path) -> PersonaConfig:
         if r_name in seen:
             raise ConfigError(f"duplicate reaction name {r_name!r}")
         seen.add(r_name)
-        reactions.append(Reaction(r_name, r_file, str(entry.get("when", "")).strip()))
+        reactions.append(
+            Reaction(
+                name=r_name,
+                when=str(entry.get("when", "")).strip(),
+                file=r_file,
+                url=r_url,
+            )
+        )
 
     return PersonaConfig(
         name=name,
