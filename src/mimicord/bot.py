@@ -199,6 +199,21 @@ class MimicClient(discord.Client):
             return
         await self._send_bursts(channel, bursts)
 
+    async def _type_for(self, channel, seconds: float) -> None:
+        """Show the typing indicator, then pause, before sending.
+
+        The indicator is decoration. Discord drops the odd connection, and a
+        blip here used to take the whole reply down with it, after we had
+        already paid to generate it.
+        """
+        try:
+            async with channel.typing():
+                await asyncio.sleep(seconds)
+                return
+        except Exception as error:
+            log.debug("typing indicator failed (%s), sending anyway", error)
+        await asyncio.sleep(seconds)
+
     async def _send_bursts(self, channel, bursts: list[str], mention: str = "") -> None:
         """Post a reply as separate messages, turning [gif:x] tags into images.
 
@@ -243,17 +258,15 @@ class MimicClient(discord.Client):
                     what = text
                 log.info("[dry run #%s] %s: %s", channel, persona, what)
             elif reaction is not None:
-                async with channel.typing():
-                    await asyncio.sleep(random.uniform(0.8, 1.6))
+                await self._type_for(channel, random.uniform(0.8, 1.6))
                 if path is not None:
                     await channel.send(file=discord.File(path))
                 else:
                     await channel.send(reaction.url)
                 await asyncio.sleep(random.uniform(0.5, 1.5))
             else:
-                async with channel.typing():
-                    delay = min(len(text) / self.style.typing_cps, 6.0)
-                    await asyncio.sleep(delay + random.uniform(0.3, 0.9))
+                delay = min(len(text) / self.style.typing_cps, 6.0)
+                await self._type_for(channel, delay + random.uniform(0.3, 0.9))
                 await channel.send(text)
                 await asyncio.sleep(random.uniform(0.5, 1.5))
             # the buffer keeps the tag so he can see he already reacted

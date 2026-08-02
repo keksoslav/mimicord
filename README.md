@@ -107,7 +107,9 @@ thing that makes a bot look like a bot.
 
 Compiling costs maybe a euro. After that it's per reply.
 
-If you have a Claude Pro or Max subscription you can use it directly, no API key, set `provider = "claude-code"`. Your plan includes a monthly Agent SDK credit ($20 / $100 / $200 depending on tier) and this draws from that. When it runs out it just stops, it can't overcharge you unless you've specifically turned on extra usage credits.
+If you have a Claude Pro or Max subscription you can use it directly, no API key, set `provider = "claude-code"`. It goes through the Claude Code login on your machine and draws from your plan's usage limits.
+
+Be aware that it shares those limits with your normal Claude use. Anthropic announced a separate monthly Agent SDK credit and then paused it, so right now a chatty bot eats into the same weekly allowance you use for everything else. Check `/usage` in a Claude Code session to see where you are. Running out stops the bot rather than charging you, unless you turned on usage credits yourself.
 
 Opus works out around 7 cents a reply through that, so a couple of thousand replies a month on the top tier. Sonnet is cheaper and mostly fine, though if the person you're copying doesn't write in English then opus is noticeably better at it.
 

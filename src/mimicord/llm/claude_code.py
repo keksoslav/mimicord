@@ -11,10 +11,12 @@ log = logging.getLogger(__name__)
 class ClaudeCodeProvider:
     """Claude through the Agent SDK, billed to a claude.ai subscription.
 
-    Uses the machine's Claude Code login, so replies draw from the plan's
-    monthly Agent SDK credit instead of API credits. That credit hard-stops
-    when spent unless extra usage was explicitly enabled on the account, so
-    there is no way to get surprise charges from here.
+    Uses the machine's Claude Code login, so replies draw from the plan's own
+    usage limits rather than from API credits. Anthropic announced a separate
+    monthly Agent SDK credit and then paused it, so for now this shares the
+    same session and weekly allowance as everything else on the plan. Hitting
+    the limit stops the bot rather than billing you, unless usage credits were
+    explicitly enabled on the account.
     """
 
     def __init__(self, model: str) -> None:
@@ -66,20 +68,29 @@ class ClaudeCodeProvider:
         options = ClaudeAgentOptions(
             system_prompt=system,
             model=self._model,
-            max_turns=1,
+            # one turn is all a chat reply needs, but the sdk treats a turn
+            # that did not finish cleanly as a hard error, so leave headroom
+            max_turns=2,
             allowed_tools=[],  # chat only, the bot must never grow hands
             setting_sources=[],  # do not load this machine's CLAUDE.md files
         )
         parts: list[str] = []
-        async for message in query(prompt=prompt, options=options):
-            if isinstance(message, AssistantMessage):
-                for block in message.content:
-                    if isinstance(block, TextBlock):
-                        parts.append(block.text)
-            elif isinstance(message, ResultMessage):
-                cost = getattr(message, "total_cost_usd", None)
-                if cost is not None:
-                    log.debug("agent sdk turn cost: $%.4f", cost)
+        try:
+            async for message in query(prompt=prompt, options=options):
+                if isinstance(message, AssistantMessage):
+                    for block in message.content:
+                        if isinstance(block, TextBlock):
+                            parts.append(block.text)
+                elif isinstance(message, ResultMessage):
+                    cost = getattr(message, "total_cost_usd", None)
+                    if cost is not None:
+                        log.debug("agent sdk turn cost: $%.4f", cost)
+        except Exception as error:
+            # the sdk raises on an error result, which throws away whatever it
+            # streamed first. if he already said his piece, send that
+            if not parts:
+                raise
+            log.warning("agent sdk ended badly (%s), keeping what it said", error)
         text = "".join(parts).strip()
         if not text:
             raise ProviderError(
