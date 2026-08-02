@@ -81,8 +81,12 @@ def sent(client) -> list[str]:
     return [m.content for m in client.buffers[FakeChannel.id]]
 
 
+def his(client) -> list[str]:
+    return [m.content for m in client.buffers[FakeChannel.id] if m.author == "testbot"]
+
+
 def test_will_not_send_the_same_reply_twice(persona_dir, fake_provider):
-    fake_provider.reply = "ns"
+    fake_provider.reply = "ns"  # every call returns the same thing
     client = make_client(persona_dir, fake_provider)
     channel = FakeChannel()
     client.buffers[channel.id].append(ContextMessage("Mike_", "kaj delas"))
@@ -91,6 +95,38 @@ def test_will_not_send_the_same_reply_twice(persona_dir, fake_provider):
     asyncio.run(client._respond(channel, "mention"))
 
     assert sent(client).count("ns") == 1
+    # the retry produced the same thing again, so he stayed quiet
+    assert len(fake_provider.calls) == 3
+
+
+def test_a_repeat_gets_one_retry_with_a_nudge(persona_dir, fake_provider):
+    fake_provider.replies = ["ns", "ns", "kk"]
+    client = make_client(persona_dir, fake_provider)
+    channel = FakeChannel()
+    client.buffers[channel.id].append(ContextMessage("Mike_", "kaj delas"))
+
+    asyncio.run(client._respond(channel, "mention"))  # ns
+    asyncio.run(client._respond(channel, "mention"))  # ns again, retried into kk
+
+    assert his(client) == ["ns", "kk"]
+    prompt = fake_provider.calls[-1]["messages"][-1].content
+    assert "[direction]" in prompt
+    assert '"ns"' in prompt
+
+
+def test_the_retry_counts_against_the_monthly_budget(persona_dir, fake_provider):
+    """It is a second model call, so it has to show up in the ledger."""
+    from datetime import datetime, timezone
+
+    fake_provider.replies = ["ns", "ns", "kk"]
+    client = make_client(persona_dir, fake_provider)
+    channel = FakeChannel()
+    client.buffers[channel.id].append(ContextMessage("Mike_", "kaj delas"))
+
+    asyncio.run(client._respond(channel, "mention"))
+    assert client.ledger.count(datetime.now(timezone.utc)) == 0  # no retry needed
+    asyncio.run(client._respond(channel, "mention"))
+    assert client.ledger.count(datetime.now(timezone.utc)) == 1
 
 
 def test_a_different_reply_still_goes_out(persona_dir, fake_provider):
