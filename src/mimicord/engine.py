@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import re
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -14,10 +15,47 @@ from mimicord.paths import PersonaPaths
 log = logging.getLogger(__name__)
 
 
+_MENTION_RE = re.compile(r"<@[!&]?\d+>|<#\d+>|@[\w.]+")
+# below this much real text, a memory lookup just matches other people's
+# pings and feeds the model its own noise back
+MIN_QUERY_CHARS = 12
+
+
 @dataclass
 class ContextMessage:
     author: str
     content: str
+
+
+def memory_query(
+    context: list["ContextMessage"],
+    window: int = 5,
+    aliases: "set[str] | None" = None,
+) -> str:
+    """Recent context with mentions and the persona's own names stripped, or
+    empty when nothing substantive is left. Being summoned by name is not a
+    topic, and looking it up just retrieves everyone else's pings."""
+    alias_re = None
+    if aliases:
+        pattern = "|".join(re.escape(a) for a in sorted(aliases, key=len, reverse=True) if a)
+        if pattern:
+            alias_re = re.compile(rf"\b(?:{pattern})\b", re.IGNORECASE)
+
+    lines = []
+    substantive = 0
+    for message in context[-window:]:
+        text = _MENTION_RE.sub(" ", message.content)
+        stripped = alias_re.sub(" ", text) if alias_re else text
+        stripped = stripped.strip()
+        if not stripped:
+            continue
+        substantive += len(stripped)
+        # keep the original text in the query, the stripping only decides
+        # whether there is enough signal to bother searching
+        lines.append(f"{message.author}: {text.strip()}")
+    if substantive < MIN_QUERY_CHARS:
+        return ""
+    return "\n".join(lines)
 
 
 class PersonaEngine:
@@ -42,6 +80,8 @@ class PersonaEngine:
         self.provider: Provider = get_provider(self.config.llm)
         want_rag = self.config.rag.enabled if rag_enabled is None else rag_enabled
         self.rag = self._load_rag() if want_rag else None
+        # the ways people address this persona, not content worth searching on
+        self._aliases = {self.config.name, *self.config.target.author_names}
         self.last_prompt: tuple[str, list[ChatMessage]] | None = None
 
     @staticmethod
@@ -84,8 +124,8 @@ class PersonaEngine:
         if self.rag is not None:
             # query with just the tail of the conversation, that is what the
             # reply will actually be about
-            query_text = "\n".join(f"{m.author}: {m.content}" for m in context[-5:])
-            memories = self.rag.query(query_text)
+            query_text = memory_query(context, aliases=self._aliases)
+            memories = self.rag.query(query_text) if query_text else []
             if memories:
                 lines = "\n".join(f"- {m}" for m in memories)
                 sections.append(f"[memories]\n{lines}\n[/memories]")
@@ -98,9 +138,12 @@ class PersonaEngine:
             max_tokens=self.config.llm.max_tokens,
             temperature=self.config.llm.temperature,
         )
-        return postprocess.apply(
+        bursts = postprocess.apply(
             raw,
             persona_name=self.config.name,
             stats=self.stats,
             max_burst=self.config.style.max_burst,
         )
+        if not bursts:
+            log.warning("model returned nothing usable, raw was %r", raw[:200])
+        return bursts
