@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 
 import typer
 from dotenv import load_dotenv
@@ -10,11 +11,26 @@ from mimicord.paths import PersonaPaths
 app = typer.Typer(no_args_is_help=True, add_completion=False)
 
 
+def force_utf8_output() -> None:
+    """Chat corpora are full of emoji, and the windows console still defaults
+    to cp1252, which raises UnicodeEncodeError on the first one printed.
+    Replace unprintable characters instead of dying mid-command."""
+    for stream in (sys.stdout, sys.stderr):
+        reconfigure = getattr(stream, "reconfigure", None)
+        if reconfigure is None:
+            continue
+        try:
+            reconfigure(encoding="utf-8", errors="replace")
+        except (ValueError, OSError):
+            pass  # redirected or already wrapped, nothing to do
+
+
 @app.callback()
 def main(
     verbose: bool = typer.Option(False, "--verbose", "-v", help="debug logging"),
 ) -> None:
     """Build Discord bots that talk like a real person."""
+    force_utf8_output()
     load_dotenv()
     logging.basicConfig(
         level=logging.DEBUG if verbose else logging.WARNING,
