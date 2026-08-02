@@ -61,3 +61,8 @@ class PersonaPaths:
     @property
     def chroma_dir(self) -> Path:
         return self.root / "chroma"
+
+    @property
+    def media_dir(self) -> Path:
+        """Reaction images the persona can send."""
+        return self.root / "media"

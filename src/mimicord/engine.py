@@ -97,6 +97,9 @@ class PersonaEngine:
             extra = self.paths.extra.read_text(encoding="utf-8").strip()
             if extra:
                 self.system = f"{self.system}\n\n{extra}"
+        reactions = self._reaction_block()
+        if reactions:
+            self.system = f"{self.system}\n\n{reactions}"
         self.examples = self._load_examples()
         self.stats = self._load_json(self.paths.stats)
         self.provider: Provider = get_provider(self.config.llm)
@@ -111,6 +114,27 @@ class PersonaEngine:
             *self.config.discord.trigger_keywords,
         }
         self.last_prompt: tuple[str, list[ChatMessage]] | None = None
+
+    def _reaction_block(self) -> str:
+        if not self.config.reactions:
+            return ""
+        lines = []
+        for reaction in self.config.reactions:
+            when = f" {reaction.when}" if reaction.when else ""
+            lines.append(f"- [gif:{reaction.name}]{when}")
+        return (
+            "## Reactions\n"
+            "You can send a saved image instead of typing. Put the tag on a "
+            "line by itself with nothing else on that line, either alone or "
+            "after a message. Only these tags exist, never invent others, and "
+            "never describe the image in words.\n" + "\n".join(lines)
+        )
+
+    def reaction_path(self, name: str) -> Path | None:
+        for reaction in self.config.reactions:
+            if reaction.name == name.lower():
+                return self.paths.media_dir / reaction.file
+        return None
 
     @staticmethod
     def _load_json(path: Path):

@@ -81,6 +81,15 @@ class StyleConfig:
 
 
 @dataclass
+class Reaction:
+    """An image the persona can send instead of typing, by emitting a tag."""
+
+    name: str
+    file: str
+    when: str = ""
+
+
+@dataclass
 class PersonaConfig:
     name: str
     target: TargetConfig
@@ -88,6 +97,7 @@ class PersonaConfig:
     discord: DiscordConfig
     rag: RagConfig
     style: StyleConfig
+    reactions: list[Reaction] = field(default_factory=list)
 
 
 def _table(data: dict, key: str) -> dict:
@@ -175,6 +185,33 @@ def load_config(path: Path) -> PersonaConfig:
         typing_cps=float(style_data.get("typing_cps", 7.0)),
     )
 
+    reactions = []
+    raw_reactions = data.get("reactions", [])
+    if not isinstance(raw_reactions, list):
+        raise ConfigError("[[reactions]] must be a list of tables")
+    seen = set()
+    for entry in raw_reactions:
+        if not isinstance(entry, dict):
+            raise ConfigError("each [[reactions]] entry must be a table")
+        r_name = str(entry.get("name", "")).strip().lower()
+        r_file = str(entry.get("file", "")).strip()
+        if not r_name or not r_file:
+            raise ConfigError("every [[reactions]] entry needs a name and a file")
+        if not r_name.replace("_", "").replace("-", "").isalnum():
+            raise ConfigError(
+                f"reaction name {r_name!r} must be letters, digits, _ or -"
+            )
+        if r_name in seen:
+            raise ConfigError(f"duplicate reaction name {r_name!r}")
+        seen.add(r_name)
+        reactions.append(Reaction(r_name, r_file, str(entry.get("when", "")).strip()))
+
     return PersonaConfig(
-        name=name, target=target, llm=llm, discord=discord, rag=rag, style=style
+        name=name,
+        target=target,
+        llm=llm,
+        discord=discord,
+        rag=rag,
+        style=style,
+        reactions=reactions,
     )
