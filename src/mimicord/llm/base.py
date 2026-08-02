@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import json
 import re
-from dataclasses import dataclass
-from typing import Any, Protocol
+from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Any, Protocol
+
+if TYPE_CHECKING:
+    from mimicord.vision import Image
 
 
 class ProviderError(Exception):
@@ -17,6 +20,9 @@ class ChatMessage:
     # marks the last message of the stable prompt prefix so providers with
     # prefix caching (anthropic) can extend the cache over the few-shots
     cache_boundary: bool = False
+    # pictures ride on the message they were posted with, which is only ever
+    # the live one, never a few-shot, so the cached prefix stays byte stable
+    images: list["Image"] = field(default_factory=list)
 
 
 class Provider(Protocol):

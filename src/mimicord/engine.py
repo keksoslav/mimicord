@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 from mimicord import postprocess
@@ -27,6 +27,30 @@ MIN_MEMORY_CHARS = 40
 class ContextMessage:
     author: str
     content: str
+    images: list = field(default_factory=list)
+
+    def render(self) -> str:
+        if self.content:
+            return f"{self.author}: {self.content}"
+        return f"{self.author}: (posted an image)"
+
+
+def collect_images(context: list["ContextMessage"], cfg) -> list:
+    """The newest few pictures, newest first, capped.
+
+    Walking the whole 25 message buffer would re-send the same meme on every
+    reply for the rest of the conversation, which is how a cheap feature
+    becomes an expensive one.
+    """
+    if not cfg.enabled or cfg.max_images <= 0:
+        return []
+    found: list = []
+    for message in reversed(context[-cfg.lookback :]):
+        for image in message.images:
+            found.append(image)
+            if len(found) >= cfg.max_images:
+                return found
+    return found
 
 
 def memory_query(
@@ -176,7 +200,7 @@ class PersonaEngine:
     def reply(self, context: list[ContextMessage], direction: str = "") -> list[str]:
         """Answer the recent chat. direction is an out of character nudge for
         the times nobody said anything to answer, like breaking a silence."""
-        transcript = "\n".join(f"{m.author}: {m.content}" for m in context)
+        transcript = "\n".join(m.render() for m in context)
         sections: list[str] = []
         if self.rag is not None:
             # query with just the tail of the conversation, that is what the
@@ -190,7 +214,17 @@ class PersonaEngine:
         sections.append(f"[chat]\n{transcript}\n[/chat]")
         if direction:
             sections.append(f"[direction]\n{direction}\n[/direction]")
-        messages = [*self.examples, ChatMessage("user", "\n".join(sections))]
+        images = collect_images(context, self.config.vision)
+        if images:
+            log.debug(
+                "sending %d image(s), about %d tokens",
+                len(images),
+                sum(i.tokens for i in images),
+            )
+        messages = [
+            *self.examples,
+            ChatMessage("user", "\n".join(sections), images=images),
+        ]
         self.last_prompt = (self.system, messages)
         raw = self.provider.complete(
             system=self.system,

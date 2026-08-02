@@ -51,6 +51,13 @@ window_step = 4
 [style]
 max_burst = 3
 typing_cps = 7
+
+[vision]
+# let him see images people post. needs: uv sync --extra vision
+enabled = false
+max_images = 1        # per reply, more than one is rarely worth paying for
+max_edge = 768        # pixels on the long side, this is the cost lever
+lookback = 4          # only pictures from the last few messages count
 """
 
 PERSONA_TEMPLATE = """\
