@@ -20,6 +20,8 @@ class MessageFacts:
     # this exact line was already sent here recently, so someone is either
     # spamming or trying to bait a reply out of the bot
     repeats_recent: bool = False
+    # a direct message rather than anything in a server
+    is_dm: bool = False
 
 
 @dataclass
@@ -67,6 +69,11 @@ def should_reply(
     """
     if facts.author_is_self:
         return False, "own message"
+    if facts.is_dm and not cfg.allow_dms:
+        # a dm ignores your channel allowlist, your always-on list and every
+        # other setting scoped to a server, and nobody but the sender ever
+        # sees it happening
+        return False, "dm"
     if facts.author_is_bot and cfg.ignore_bots:
         return False, "bot author"
     if facts.repeats_recent:

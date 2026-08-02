@@ -65,6 +65,8 @@ which checks the token, the intent, and whether it's actually in a server, so yo
 
 Test with `--dry-run` first. It connects and listens for real but prints replies to the terminal instead of posting them.
 
+**He ignores DMs.** Anyone who shares a server with the bot can open a DM with it, and that conversation ignores your channel allowlist, your always-on list and everything else scoped to a server. Nobody but the sender ever sees it. If your trigger keyword is the person's name, one bored mate can sit in a DM saying it over and over and spend your entire budget without anyone noticing. `allow_dms = false` is the default for that reason. There is no switch on Discord's side to stop bot DMs, so this has to be handled in the bot.
+
 ## Making it better
 
 The compiled persona is a decent start but it can't know things people never say in chat. Nobody types their own surname in their group chat, so the bot won't know it.

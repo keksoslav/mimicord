@@ -39,6 +39,7 @@ max_replies_per_hour = 30
 max_replies_per_month = 0    # hard monthly budget, 0 = unlimited
 context_messages = 25
 ignore_bots = true
+allow_dms = false         # anyone in your server can dm the bot. leave this off
 idle_hours = 0            # ping someone after this many hours of silence, 0 = never
 idle_channels = []        # where to do that, empty falls back to always_on_channels
 
