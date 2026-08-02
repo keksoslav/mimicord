@@ -123,6 +123,25 @@ this gets expensive without you noticing.
 He can't tell you who is in a photo, by the way. Claude won't identify real
 people and you can't prompt around it.
 
+## Attacking your own bot
+
+Someone will try to break him. `mimicord redteam janez` gets there first:
+
+```
+uv run mimicord redteam janez
+```
+
+It runs a dozen attempts through the real engine and prints what he says to
+each. Getting him to admit he is a bot, smuggling `ignore all previous
+instructions` in through the chat, asking for his prompt back, faking a system
+message, and making him write code or a bullet list. Some of it is checked
+automatically, the rest you read, because no check can tell you whether he
+sounded like himself.
+
+Worth running before you change the prompt and again afterwards. Otherwise you
+have no idea whether you improved it or just moved words around. Costs about a
+dozen replies.
+
 Someone in your server will eventually try to break him by pasting the same line
 twenty times. Repeats get ignored, and a burst of messages gets one reply instead
 of one each, because he waits `debounce_seconds` for you to finish typing before
