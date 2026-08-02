@@ -130,11 +130,14 @@ class PersonaEngine:
             "never describe the image in words.\n" + "\n".join(lines)
         )
 
-    def reaction_path(self, name: str) -> Path | None:
+    def find_reaction(self, name: str):
         for reaction in self.config.reactions:
             if reaction.name == name.lower():
-                return self.paths.media_dir / reaction.file
+                return reaction
         return None
+
+    def reaction_path(self, reaction) -> Path:
+        return self.paths.media_dir / reaction.file
 
     @staticmethod
     def _load_json(path: Path):
