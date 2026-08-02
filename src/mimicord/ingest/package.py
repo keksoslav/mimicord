@@ -58,11 +58,27 @@ def _channel_rows(channel_dir: Path) -> list[dict]:
     return []
 
 
+def _account_is_target(
+    author_id: str | None, author_name: str | None, target: TargetConfig
+) -> bool:
+    """A package holds one account's messages, so the whole file is either the
+    persona target or it is context. Deciding once beats guessing per row."""
+    if not target.author_ids and not target.author_names:
+        return True  # nothing configured yet, assume the package owner
+    if author_id and author_id in target.author_ids:
+        return True
+    if author_name:
+        return author_name.lower() in {n.lower() for n in target.author_names}
+    return False
+
+
 def parse_package(root: Path, target: TargetConfig) -> Iterator[Message]:
     """Yield normalized messages from an official Discord data package.
 
-    root may be the package root or its messages/ folder. Every message in a
-    package belongs to the requesting account, so everything is is_target.
+    root may be the package root or its messages/ folder. Every message
+    belongs to the requesting account, who may or may not be the persona
+    target: ingesting your own export while building someone else's persona
+    is a legitimate way to add context.
     """
     if (root / "messages").is_dir():
         package_root = root
@@ -79,6 +95,12 @@ def parse_package(root: Path, target: TargetConfig) -> Iterator[Message]:
     author_id, author_name = _account_identity(package_root)
     if not author_name:
         author_name = target.author_names[0] if target.author_names else "me"
+    is_target = _account_is_target(author_id, author_name, target)
+    if not is_target:
+        log.info(
+            "package account %s is not the persona target, ingesting as context",
+            author_name,
+        )
 
     for channel_dir in sorted(messages_dir.glob("c*")):
         if not channel_dir.is_dir():
@@ -114,7 +136,7 @@ def parse_package(root: Path, target: TargetConfig) -> Iterator[Message]:
                 guild_name=guild_name,
                 author_id=author_id,
                 author_name=author_name,
-                is_target=True,
+                is_target=is_target,
                 content=content,
                 timestamp=timestamp,
                 reply_to_id=None,  # packages carry no reply references

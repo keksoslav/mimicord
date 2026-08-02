@@ -148,16 +148,18 @@ class Store:
         return _to_message(row) if row else None
 
     def retag(self, author_ids: list[str], author_names: list[str]) -> int:
-        """Re-flag is_target after the [target] config changed."""
+        """Re-flag is_target after the [target] config changed.
+
+        Applies to every source: a data package can hold someone other than
+        the persona target, in which case its rows are context.
+        """
         names = [n.lower() for n in author_names]
         with self.conn:
-            self.conn.execute("UPDATE messages SET is_target = 0 WHERE source = 'dce'")
+            self.conn.execute("UPDATE messages SET is_target = 0")
             cursor = self.conn.execute(
                 f"""UPDATE messages SET is_target = 1
-                    WHERE source = 'dce' AND (
-                      author_id IN ({','.join('?' * len(author_ids)) or "''"})
-                      OR lower(author_name) IN ({','.join('?' * len(names)) or "''"})
-                    )""",
+                    WHERE author_id IN ({','.join('?' * len(author_ids)) or "''"})
+                       OR lower(author_name) IN ({','.join('?' * len(names)) or "''"})""",
                 [*author_ids, *names],
             )
         return cursor.rowcount

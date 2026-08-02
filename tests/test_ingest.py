@@ -84,6 +84,38 @@ def test_package_fields(store):
     assert csv_row.channel_name == "Direct Message with miha#0000"
 
 
+def test_package_not_flagged_when_owner_is_not_the_target(store):
+    """Ingesting your own export while building someone else's persona is a
+    legitimate way to add context, but it is not their voice."""
+    someone_else = TargetConfig(author_ids=["646825804369756190"])
+    ingest_package(store, FIXTURES / "package_sample", someone_else)
+    counts = store.counts()
+    assert counts["total"] == 4
+    assert counts["target"] == 0
+
+
+def test_package_flagged_by_account_name(store):
+    ingest_package(store, FIXTURES / "package_sample", TargetConfig(author_names=["JANEZ123"]))
+    assert store.counts()["target"] == 4  # case insensitive, from account/user.json
+
+
+def test_package_flagged_when_no_target_configured(store):
+    ingest_package(store, FIXTURES / "package_sample", TargetConfig())
+    assert store.counts()["target"] == 4  # nothing to compare against yet
+
+
+def test_retag_covers_package_rows(store):
+    ingest_package(store, FIXTURES / "package_sample", JANEZ_BY_ID)
+    assert store.counts()["target"] == 4
+    # user fixes [target] to point at someone else
+    changed = store.retag(["646825804369756190"], [])
+    assert changed == 0
+    assert store.counts()["target"] == 0
+    # and back again
+    store.retag(["111"], [])
+    assert store.counts()["target"] == 4
+
+
 def test_package_accepts_messages_dir_directly(store):
     parsed = ingest_package(store, FIXTURES / "package_sample" / "messages", JANEZ_BY_ID)
     assert parsed == 4
