@@ -4,6 +4,7 @@ import json
 import logging
 import re
 from dataclasses import dataclass, field
+from datetime import datetime
 from pathlib import Path
 
 from mimicord import postprocess, rules
@@ -81,6 +82,18 @@ def memory_query(
     if substantive < MIN_QUERY_CHARS:
         return ""
     return "\n".join(lines)
+
+
+def now_section(moment: "datetime") -> str:
+    """Tell him what day and time it is.
+
+    He has no clock otherwise, so he fills the gap with whatever sounds
+    plausible: being knackered after a shift, on a Sunday. Machine local
+    time, since the persona lives wherever the bot is running.
+    """
+    return (
+        f"[now]\n{moment:%A} {moment.day} {moment:%B %Y}, {moment:%H:%M}\n[/now]"
+    )
 
 
 def is_useful_memory(text: str, aliases: "set[str] | None" = None) -> bool:
@@ -205,7 +218,9 @@ class PersonaEngine:
         """Answer the recent chat. direction is an out of character nudge for
         the times nobody said anything to answer, like breaking a silence."""
         transcript = "\n".join(m.render() for m in context)
-        sections: list[str] = []
+        # everything below rides in the final user message, never the system
+        # prompt: a clock in a cached prefix would break the cache every minute
+        sections: list[str] = [now_section(datetime.now().astimezone())]
         if self.rag is not None:
             # query with just the tail of the conversation, that is what the
             # reply will actually be about

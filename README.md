@@ -71,6 +71,8 @@ The compiled persona is a decent start but it can't know things people never say
 
 Put that stuff in `personas/janez/extra.md`. It gets stuck on the end of the prompt and, unlike `persona.md`, recompiling doesn't wipe it. Full name, age, job, family, whatever. Also good for fixing habits you don't like, mine kept opening every message with my name until I told it not to.
 
+He knows what day and time it is, machine local time, sent with every reply. Without it he invents whatever sounds plausible and gets caught: mine claimed he was knackered after a shift, on a Sunday, and somebody noticed. It rides in the live message rather than the system prompt, because a clock in a cached prefix would blow the cache every minute.
+
 One thing to know: the `## Rules` block at the bottom of `persona.md` is owned by mimicord, not by you. The engine strips it and appends its own copy right at the end of the prompt, after `extra.md` and the reaction list, because whatever the model reads last carries the most weight and those are the lines that must not bend. Editing it in `persona.md` does nothing. `extra.md` is where your own rules go.
 
 You can give them reaction gifs too:
