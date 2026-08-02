@@ -225,15 +225,33 @@ class MimicClient(discord.Client):
             return
         log.info("replying in #%s (%s)", channel.id, reason)
         bursts = await asyncio.to_thread(self.engine.reply, context)
+        if bursts and self._repeats_himself(channel.id, bursts):
+            # his own last message is already in the context and he said it
+            # again anyway, so ask outright. one retry, then give up: silence
+            # is cheaper than a loop
+            log.info("that repeats his last one in #%s, asking again", channel.id)
+            self.ledger.increment(datetime.now(timezone.utc))
+            bursts = await asyncio.to_thread(
+                self.engine.reply, context, self._say_something_else(channel.id)
+            )
         if not bursts:
             log.warning("nothing to say in #%s, staying quiet", channel.id)
             return
-        if "\n".join(bursts) == self.last_reply.get(channel.id):
-            # nobody says the same thing twice in a row, and a bot doing it is
-            # the tell that gives the whole game away
-            log.info("would have repeated himself in #%s, staying quiet", channel.id)
+        if self._repeats_himself(channel.id, bursts):
+            log.info("still repeating himself in #%s, staying quiet", channel.id)
             return
         await self._send_bursts(channel, bursts)
+
+    def _repeats_himself(self, channel_id: int, bursts: list[str]) -> bool:
+        return "\n".join(bursts) == self.last_reply.get(channel_id)
+
+    def _say_something_else(self, channel_id: int) -> str:
+        previous = (self.last_reply.get(channel_id) or "").replace("\n", " / ")
+        return (
+            f'You just said "{previous}" and you are about to say it again. '
+            "Say something different. Do not rephrase that, react to what was "
+            "actually said instead."
+        )
 
     async def _type_for(self, channel, seconds: float) -> None:
         """Show the typing indicator, then pause, before sending.
