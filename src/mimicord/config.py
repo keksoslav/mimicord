@@ -59,6 +59,11 @@ class DiscordConfig:
     max_replies_per_month: int = 0  # 0 = no monthly budget
     context_messages: int = 25
     ignore_bots: bool = True
+    # anyone sharing a server with the bot can open a dm with it, where none of
+    # your channel settings apply and nobody else can see what is going on. off
+    # by default: a private, unwatched, unmetered channel into your budget is
+    # not something you should have to opt out of
+    allow_dms: bool = False
     idle_hours: float = 0.0  # 0 = never break the silence
     idle_channels: list[str] = field(default_factory=list)
 
@@ -205,6 +210,7 @@ def load_config(path: Path) -> PersonaConfig:
         max_replies_per_month=int(discord_data.get("max_replies_per_month", 0)),
         context_messages=int(discord_data.get("context_messages", 25)),
         ignore_bots=bool(discord_data.get("ignore_bots", True)),
+        allow_dms=bool(discord_data.get("allow_dms", False)),
         idle_hours=float(discord_data.get("idle_hours", 0.0)),
         idle_channels=_str_list(discord_data, "idle_channels"),
     )

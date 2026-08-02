@@ -83,6 +83,13 @@ class MimicClient(discord.Client):
     async def on_message(self, message: discord.Message) -> None:
         if self.user is not None and message.author.id == self.user.id:
             return  # own sends are appended to the buffer at send time
+        is_dm = message.guild is None
+        if is_dm and not self.cfg.allow_dms:
+            # bail before buffering or downloading anything. should_reply would
+            # refuse this too, but by then we would already have pulled the
+            # attachments off the cdn for someone we are never going to answer
+            log.debug("ignoring a dm from %s", message.author)
+            return
         content = (message.content or "").strip()
         author = message.author.display_name
         self.last_seen[message.channel.id] = datetime.now(timezone.utc)
@@ -107,6 +114,7 @@ class MimicClient(discord.Client):
             replies_to_bot=self._replies_to_me(message),
             content=content,
             repeats_recent=repeats,
+            is_dm=is_dm,
         )
         decision, reason = should_reply(
             facts,
