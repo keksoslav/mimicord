@@ -80,8 +80,14 @@ class PersonaEngine:
         self.provider: Provider = get_provider(self.config.llm)
         want_rag = self.config.rag.enabled if rag_enabled is None else rag_enabled
         self.rag = self._load_rag() if want_rag else None
-        # the ways people address this persona, not content worth searching on
-        self._aliases = {self.config.name, *self.config.target.author_names}
+        # every way people address this persona: its name, the account names
+        # it was built from, and whatever nicknames summon it. none of these
+        # are content worth searching memories on
+        self._aliases = {
+            self.config.name,
+            *self.config.target.author_names,
+            *self.config.discord.trigger_keywords,
+        }
         self.last_prompt: tuple[str, list[ChatMessage]] | None = None
 
     @staticmethod
