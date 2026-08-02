@@ -167,6 +167,7 @@ class PersonaEngine:
             persona_name=self.config.name,
             stats=self.stats,
             max_burst=self.config.style.max_burst,
+            context_authors={m.author for m in context},
         )
         if not bursts:
             log.warning("model returned nothing usable, raw was %r", raw[:200])
