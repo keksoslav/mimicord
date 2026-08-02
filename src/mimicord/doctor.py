@@ -69,6 +69,16 @@ def check_artifacts(paths: PersonaPaths, cfg: PersonaConfig) -> list[Check]:
     else:
         checks.append(Check("few-shots", None, "none, mimicord compile"))
 
+    for reaction in cfg.reactions:
+        path = paths.media_dir / reaction.file
+        checks.append(
+            Check(
+                f"reaction {reaction.name}",
+                path.is_file(),
+                str(path) if not path.is_file() else f"{path.stat().st_size // 1024} KB",
+            )
+        )
+
     if cfg.rag.enabled:
         checks.append(
             Check(

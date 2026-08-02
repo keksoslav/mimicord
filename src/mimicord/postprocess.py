@@ -8,6 +8,15 @@ _THINKING_RE = re.compile(
 )
 _STRAY_TAG_RE = re.compile(r"</?(thinking|reasoning|reflection|internal)>", re.IGNORECASE)
 
+# a burst that is only this tag is sent as an image instead of as text
+REACTION_RE = re.compile(r"^\[gif:([a-zA-Z0-9_-]+)\]$")
+
+
+def reaction_name(burst: str) -> str | None:
+    match = REACTION_RE.match(burst.strip())
+    return match.group(1).lower() if match else None
+
+
 _AI_ISMS = (
     re.compile(r"^as an ai\b.*$", re.IGNORECASE | re.MULTILINE),
     re.compile(r"^i'?m an ai\b.*$", re.IGNORECASE | re.MULTILINE),

@@ -9,6 +9,7 @@ from datetime import datetime, timezone
 
 import discord
 
+from mimicord import postprocess
 from mimicord.engine import ContextMessage, PersonaEngine
 from mimicord.triggers import MessageFacts, TriggerState, should_reply
 from mimicord.usage import UsageLedger
@@ -138,14 +139,28 @@ class MimicClient(discord.Client):
             return
         persona = self.engine.config.name
         for burst in bursts:
+            name = postprocess.reaction_name(burst)
+            path = self.engine.reaction_path(name) if name else None
+            if name and (path is None or not path.is_file()):
+                # never post a raw tag, it breaks the illusion worse than silence
+                log.warning("reaction %r has no file at %s, dropping", name, path)
+                continue
+
             if self.dry_run:
-                log.info("[dry run #%s] %s: %s", channel, persona, burst)
+                what = f"<sends {path.name}>" if path else burst
+                log.info("[dry run #%s] %s: %s", channel, persona, what)
+            elif path is not None:
+                async with channel.typing():
+                    await asyncio.sleep(random.uniform(0.8, 1.6))
+                await channel.send(file=discord.File(path))
+                await asyncio.sleep(random.uniform(0.5, 1.5))
             else:
                 async with channel.typing():
                     delay = min(len(burst) / self.style.typing_cps, 6.0)
                     await asyncio.sleep(delay + random.uniform(0.3, 0.9))
                 await channel.send(burst)
                 await asyncio.sleep(random.uniform(0.5, 1.5))
+            # the buffer keeps the tag so he can see he already reacted
             self.buffers[channel.id].append(ContextMessage(persona, burst))
 
 
