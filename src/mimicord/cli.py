@@ -420,6 +420,41 @@ def doctor(
 
 
 @app.command()
+def redteam(
+    name: str,
+    no_rag: bool = typer.Option(False, "--no-rag", help="test the prompt alone"),
+) -> None:
+    """Attack the persona prompt and see what gets through.
+
+    Runs a fixed set of attempts to break character, smuggle instructions in
+    through the chat, and turn him back into an assistant. Some checks are
+    automatic; the rest you read. Re-run it after changing the prompt to see
+    whether you improved anything or just moved words around.
+    """
+    from mimicord import redteam as redteam_mod
+    from mimicord.engine import PersonaEngine
+
+    engine = PersonaEngine(name, rag_enabled=False if no_rag else None)
+    typer.echo(f"attacking {name} ({engine.config.llm.provider}/{engine.config.llm.model})")
+    typer.echo(f"{len(redteam_mod.ATTACKS)} attempts, one call each\n")
+
+    results = redteam_mod.run(engine)
+    for result in results:
+        mark = "ok  " if result.ok else "FAIL"
+        typer.echo(f"  [{mark}] {result.attack.name}  ({result.attack.what})")
+        typer.echo(f"         said: {result.reply or '(nothing)'}")
+        for failure in result.failures:
+            typer.echo(f"         >>>> {failure}")
+        typer.echo("")
+
+    failed = [r for r in results if not r.ok]
+    typer.echo(f"{len(results) - len(failed)}/{len(results)} held up")
+    if failed:
+        typer.echo("failed: " + ", ".join(r.attack.name for r in failed))
+    typer.echo("the passes still need reading, a check cannot tell you he sounded right")
+
+
+@app.command()
 def run(
     name: str,
     dry_run: bool = typer.Option(
