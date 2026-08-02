@@ -183,8 +183,9 @@ def _cost_lines(paths: "PersonaPaths", cfg) -> list[str]:
     ]
     pricing = PRICING_PER_MTOK.get(cfg.llm.model)
     if cfg.llm.provider == "claude-code":
-        lines.append("  billed to your claude.ai plan's monthly agent sdk credit")
-        lines.append("  the credit hard-stops when spent, no surprise charges")
+        lines.append("  billed to your claude.ai plan's own usage limits")
+        lines.append("  shares the session and weekly allowance with your normal use")
+        lines.append("  running out stops the bot, it does not charge you")
         if cfg.discord.max_replies_per_month:
             lines.append(
                 f"  bot budget            {cfg.discord.max_replies_per_month} replies/month"
