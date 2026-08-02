@@ -74,6 +74,23 @@ def test_sample_chunks_spreads_deterministically():
     assert sum(1 for c in picked if c.index >= 75) == 5
 
 
+@pytest.mark.parametrize("cap", [1, 2, 3, 7])
+def test_sample_chunks_handles_tiny_caps(cap):
+    """Small caps are what you use to test a run before committing to it."""
+    chunks = [
+        Chunk(i, "c", None, f"t{i:03d}", f"t{i:03d}", 10, 5, "x") for i in range(60)
+    ]
+    picked = sample_chunks(chunks, cap=cap)
+    assert len(picked) == cap
+    assert len({c.index for c in picked}) == cap  # no duplicates
+    assert picked == sorted(picked, key=lambda c: c.index)
+
+
+def test_sample_chunks_cap_larger_than_corpus():
+    chunks = [Chunk(i, "c", None, "t", "t", 10, 5, "x") for i in range(4)]
+    assert sample_chunks(chunks, cap=50) == chunks
+
+
 def test_mapper_caches_and_resumes(corpus, tmp_path):
     chunks = build_chunks(corpus)
     chunks_dir = tmp_path / "chunks"

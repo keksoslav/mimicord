@@ -474,15 +474,19 @@ class MainWindow(QMainWindow):
                     return "no target messages to analyze"
                 emit(f"{len(chunks)} chunks to analyze")
                 provider = get_provider(cfg.llm, role="map")
-                results = analyze_chunks(
-                    chunks,
-                    provider,
-                    cfg.name,
-                    paths.chunks_dir,
-                    progress=lambda c, cached: emit(
-                        f"chunk {c.index + 1}/{len(chunks)} "
+                position = 0
+
+                def progress(chunk, cached):
+                    nonlocal position
+                    position += 1
+                    emit(
+                        f"chunk {position}/{len(chunks)} "
+                        f"({chunk.channel_name or chunk.channel_id}) "
                         + ("cached" if cached else "done")
-                    ),
+                    )
+
+                results = analyze_chunks(
+                    chunks, provider, cfg.name, paths.chunks_dir, progress=progress
                 )
             emit("merging into one profile...")
             profile = reduce_profiles(
