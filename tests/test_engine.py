@@ -67,6 +67,19 @@ def test_reply_postprocesses(persona_dir, fake_provider):
     assert bursts == ["ma ja", "saj vem"]
 
 
+def test_aliases_cover_every_way_of_addressing_the_persona(persona_dir, fake_provider):
+    """Nicknames that summon the bot are not topics to search memories on."""
+    persona_dir.joinpath("persona.toml").write_text(
+        'name = "testbot"\n'
+        '[llm]\nprovider = "ollama"\n'
+        '[target]\nauthor_names = ["SaNdMaN"]\n'
+        '[discord]\ntrigger_keywords = ["timi", "glavonja"]\n',
+        encoding="utf-8",
+    )
+    engine = make_engine(persona_dir, fake_provider, with_examples=False)
+    assert engine._aliases == {"testbot", "SaNdMaN", "timi", "glavonja"}
+
+
 def test_works_without_examples(persona_dir, fake_provider):
     engine = make_engine(persona_dir, fake_provider, with_examples=False)
     engine.reply([ContextMessage("you", "hej")])
