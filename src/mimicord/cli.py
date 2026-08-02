@@ -386,6 +386,39 @@ def compile_cmd(
 
 
 @app.command()
+def doctor(
+    name: str,
+    skip_discord: bool = typer.Option(
+        False, "--skip-discord", help="only check local artifacts, no login"
+    ),
+) -> None:
+    """Check a persona is ready to run: artifacts, provider, token, intents."""
+    from mimicord import doctor as doctor_mod
+    from mimicord.config import load_config
+
+    paths = PersonaPaths.for_persona(name)
+    cfg = load_config(paths.config)
+    typer.echo(f"persona {cfg.name}\n")
+
+    checks = doctor_mod.check_artifacts(paths, cfg)
+    checks.append(doctor_mod.check_provider(cfg))
+    if not skip_discord:
+        typer.echo("  (connecting to discord...)")
+        checks += doctor_mod.check_discord(cfg)
+
+    for check in checks:
+        detail = f"  {check.detail}" if check.detail else ""
+        typer.echo(f"  [{check.mark}] {check.name}{detail}")
+
+    failed = [c for c in checks if c.ok is False]
+    typer.echo("")
+    if failed:
+        typer.echo(f"{len(failed)} problem(s) to fix before running")
+        raise typer.Exit(1)
+    typer.echo(f"ready: mimicord run {name} --dry-run")
+
+
+@app.command()
 def run(
     name: str,
     dry_run: bool = typer.Option(
