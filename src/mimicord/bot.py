@@ -20,6 +20,8 @@ log = logging.getLogger(__name__)
 IDLE_CHECK_SECONDS = 300
 # only recent talkers are worth poking, nobody wants a ping from three weeks ago
 POKE_CANDIDATES = 6
+# how far back to look for the same line before calling it a flood
+REPEAT_WINDOW = 4
 
 
 class MimicClient(discord.Client):
@@ -52,6 +54,7 @@ class MimicClient(discord.Client):
         self.last_seen: dict[int, datetime] = {}
         # channel -> {user id: display name}, oldest talker first
         self.people: dict[int, dict[int, str]] = defaultdict(dict)
+        self.last_reply: dict[int, str] = {}
         self.idle_task: asyncio.Task | None = None
 
     async def setup_hook(self) -> None:
@@ -85,8 +88,15 @@ class MimicClient(discord.Client):
         self.last_seen[message.channel.id] = datetime.now(timezone.utc)
         if not message.author.bot:
             self._note_person(message.channel.id, message.author)
+
+        buffer = self.buffers[message.channel.id]
+        # check before appending, otherwise the message always matches itself
+        repeats = bool(content) and any(
+            entry.author == author and entry.content == content
+            for entry in list(buffer)[-REPEAT_WINDOW:]
+        )
         if content:
-            self.buffers[message.channel.id].append(ContextMessage(author, content))
+            buffer.append(ContextMessage(author, content))
 
         facts = MessageFacts(
             channel_id=str(message.channel.id),
@@ -95,6 +105,7 @@ class MimicClient(discord.Client):
             mentions_bot=self._mentions_me(message),
             replies_to_bot=self._replies_to_me(message),
             content=content,
+            repeats_recent=repeats,
         )
         decision, reason = should_reply(
             facts,
@@ -113,6 +124,10 @@ class MimicClient(discord.Client):
             log.debug("skip #%s: already generating", message.channel.id)
             return
         async with lock:
+            if self.cfg.debounce_seconds:
+                # hold the lock while the rest of their burst lands. those
+                # messages get buffered and skipped, then answered as one
+                await asyncio.sleep(self.cfg.debounce_seconds)
             self.state.note_reply(facts.channel_id, time.monotonic())
             # dry runs still call the llm, so they count against the budget too
             self.ledger.increment(datetime.now(timezone.utc))
@@ -177,6 +192,11 @@ class MimicClient(discord.Client):
         if not bursts:
             log.warning("nothing to say in #%s, staying quiet", channel.id)
             return
+        if "\n".join(bursts) == self.last_reply.get(channel.id):
+            # nobody says the same thing twice in a row, and a bot doing it is
+            # the tell that gives the whole game away
+            log.info("would have repeated himself in #%s, staying quiet", channel.id)
+            return
         await self._send_bursts(channel, bursts)
 
     async def _send_bursts(self, channel, bursts: list[str], mention: str = "") -> None:
@@ -239,6 +259,9 @@ class MimicClient(discord.Client):
             # the buffer keeps the tag so he can see he already reacted
             self.buffers[channel.id].append(ContextMessage(persona, text))
         self.last_seen[channel.id] = datetime.now(timezone.utc)
+        # what was asked for, not what went out, so the check in _respond
+        # compares like with like
+        self.last_reply[channel.id] = "\n".join(bursts)
 
     async def _idle_loop(self) -> None:
         await self.wait_until_ready()

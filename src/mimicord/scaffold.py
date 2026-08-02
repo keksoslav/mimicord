@@ -34,6 +34,7 @@ interject_probability = 0.02
 always_on_channels = []  # channel ids where the bot replies to everything
 channel_allowlist = []   # empty = all channels
 cooldown_seconds = 45
+debounce_seconds = 2.5    # wait out a burst of messages, then answer it once
 max_replies_per_hour = 30
 max_replies_per_month = 0    # hard monthly budget, 0 = unlimited
 context_messages = 25
