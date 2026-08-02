@@ -31,12 +31,14 @@ def test_alias_stripping_is_case_insensitive():
     assert memory_query(ctx(("miha", "SANDMAN")), aliases={"sandman"}) == ""
 
 
-def test_alias_inside_a_real_sentence_still_queries():
+def test_alias_removed_from_the_query_itself():
+    """The name must not reach the search: it dominates the embedding and
+    retrieves every window where anyone was summoned."""
     query = memory_query(
         ctx(("miha", "sandman a si vidu kolk je ura zdele")), aliases={"sandman"}
     )
-    # the alias only gates the decision, the query keeps the original wording
-    assert "sandman a si vidu kolk je ura zdele" in query
+    assert "sandman" not in query.lower()
+    assert "a si vidu kolk je ura zdele" in query
 
 
 def test_alias_is_not_matched_inside_other_words():
@@ -65,3 +67,35 @@ def test_only_last_window_used():
 
 def test_empty_context():
     assert memory_query([]) == ""
+
+
+def test_ping_spam_memories_are_dropped():
+    """The exact windows that derailed the live bot: nothing but summons."""
+    from mimicord.engine import is_useful_memory
+
+    aliases = {"sandman", "timi"}
+    spam = (
+        "(2022-06-19, SaNdMaN) kekSoslav: Zdravo timi / kekSoslav: Timi? "
+        "/ kekSoslav: Timi / kekSoslav: @SaNdMaN"
+    )
+    assert is_useful_memory(spam, aliases) is False
+
+
+def test_substantive_memories_are_kept():
+    from mimicord.engine import is_useful_memory
+
+    real = (
+        "(2024-02-11, SaNdMaN) SaNdMaN: ja sm bil na sihtu cel dan pa sm mrtu "
+        "/ kekSoslav: kok dolg / SaNdMaN: od sestih do dveh"
+    )
+    assert is_useful_memory(real, {"sandman", "timi"}) is True
+
+
+def test_memory_mentioning_the_name_in_passing_is_kept():
+    from mimicord.engine import is_useful_memory
+
+    text = (
+        "(2024-05-02, general) kekSoslav: timi a si vidu da so dali nov update "
+        "za cs2 / SaNdMaN: ja sm bral smoke so spet spremenili"
+    )
+    assert is_useful_memory(text, {"sandman", "timi"}) is True

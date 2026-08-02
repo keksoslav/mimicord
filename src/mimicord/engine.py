@@ -19,6 +19,8 @@ _MENTION_RE = re.compile(r"<@[!&]?\d+>|<#\d+>|@[\w.]+")
 # below this much real text, a memory lookup just matches other people's
 # pings and feeds the model its own noise back
 MIN_QUERY_CHARS = 12
+# a retrieved window shorter than this once names are removed is ping spam
+MIN_MEMORY_CHARS = 40
 
 
 @dataclass
@@ -45,17 +47,32 @@ def memory_query(
     substantive = 0
     for message in context[-window:]:
         text = _MENTION_RE.sub(" ", message.content)
-        stripped = alias_re.sub(" ", text) if alias_re else text
-        stripped = stripped.strip()
-        if not stripped:
+        if alias_re:
+            text = alias_re.sub(" ", text)
+        text = " ".join(text.split())  # collapse the gaps stripping leaves
+        if not text:
             continue
-        substantive += len(stripped)
-        # keep the original text in the query, the stripping only decides
-        # whether there is enough signal to bother searching
-        lines.append(f"{message.author}: {text.strip()}")
+        substantive += len(text)
+        lines.append(f"{message.author}: {text}")
     if substantive < MIN_QUERY_CHARS:
         return ""
     return "\n".join(lines)
+
+
+def is_useful_memory(text: str, aliases: "set[str] | None" = None) -> bool:
+    """Drop retrieved windows that are mostly people summoning each other.
+
+    Those match strongly on a name in the query and carry no information,
+    and a promptful of them convinces the model the topic is the name.
+    """
+    stripped = _MENTION_RE.sub(" ", text)
+    if aliases:
+        pattern = "|".join(re.escape(a) for a in sorted(aliases, key=len, reverse=True) if a)
+        if pattern:
+            stripped = re.sub(rf"\b(?:{pattern})\b", " ", stripped, flags=re.IGNORECASE)
+    # the rendering joins messages with " / " and prefixes an author per line
+    stripped = re.sub(r"\b\w+:", " ", stripped).replace("/", " ")
+    return len(" ".join(stripped.split())) >= MIN_MEMORY_CHARS
 
 
 class PersonaEngine:
@@ -132,6 +149,7 @@ class PersonaEngine:
             # reply will actually be about
             query_text = memory_query(context, aliases=self._aliases)
             memories = self.rag.query(query_text) if query_text else []
+            memories = [m for m in memories if is_useful_memory(m, self._aliases)]
             if memories:
                 lines = "\n".join(f"- {m}" for m in memories)
                 sections.append(f"[memories]\n{lines}\n[/memories]")
