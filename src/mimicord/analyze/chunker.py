@@ -123,6 +123,8 @@ def sample_chunks(
         return chunks
 
     def spread(items: list[Chunk], n: int) -> list[Chunk]:
+        if n <= 0:
+            return []
         if n >= len(items):
             return list(items)
         step = len(items) / n

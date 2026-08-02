@@ -311,10 +311,14 @@ def analyze(
 
         map_provider = get_provider(cfg.llm, role="map")
 
+        position = 0
+
         def progress(chunk, cached):
+            nonlocal position
+            position += 1
             note = "cached" if cached else "done"
             typer.echo(
-                f"  chunk {chunk.index + 1}/{len(chunks)} "
+                f"  chunk {position}/{len(chunks)} "
                 f"({chunk.channel_name or chunk.channel_id}, "
                 f"{chunk.target_count} target msgs) {note}"
             )
