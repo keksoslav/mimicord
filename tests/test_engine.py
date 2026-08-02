@@ -93,7 +93,7 @@ def test_extra_facts_are_appended_to_the_system_prompt(persona_dir, fake_provide
     )
     engine = make_engine(persona_dir, fake_provider, with_examples=False)
     assert engine.system.startswith("# Persona: testbot")
-    assert engine.system.endswith("- your name is Timotej")
+    assert "- your name is Timotej" in engine.system
 
 
 def test_extra_facts_are_optional(persona_dir, fake_provider):

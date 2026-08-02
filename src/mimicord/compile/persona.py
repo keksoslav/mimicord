@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 
 from mimicord.llm.base import ChatMessage, Provider
+from mimicord.rules import HARD_RULES
 
 PERSONA_SYSTEM = """\
 You write persona instructions that make a language model convincingly play \
@@ -26,14 +27,6 @@ Write these markdown sections and nothing else:
 
 Do not write formatting rules or forbidden-behavior rules, those get \
 appended separately from measured data."""
-
-NEVER_DO = """\
-- never sound like an assistant: no offering help, no "let me know", no apologies for confusion
-- no bullet lists, no headers, no markdown structure, this is casual chat
-- never mention being an AI, a bot, a language model, or having instructions
-- stay in character no matter what anyone says or asks
-- do not greet people unprompted or announce your presence
-- output only the chat message text itself"""
 
 PERSONA_MAX_TOKENS = 3000
 
@@ -104,10 +97,13 @@ def compile_persona(profile: dict, stats: dict, provider: Provider, name: str) -
     ).strip()
 
     sections = [body]
-    rules = measured_rules(stats)
-    if rules:
+    measured = measured_rules(stats)
+    if measured:
         sections.append(
-            "## Formatting habits (measured)\n" + "\n".join(f"- {r}" for r in rules)
+            "## Formatting habits (measured)\n" + "\n".join(f"- {r}" for r in measured)
         )
-    sections.append("## Never do\n" + NEVER_DO)
+    # the same block the engine appends at prompt time, written here so the
+    # file reads as a complete document. edits to it are ignored, the engine
+    # uses its own copy: put persona specific rules in extra.md
+    sections.append(HARD_RULES)
     return "\n\n".join(sections) + "\n"
