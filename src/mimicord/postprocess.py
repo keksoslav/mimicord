@@ -17,7 +17,11 @@ _AI_ISMS = (
 )
 
 
-def clean(text: str, persona_name: str | None = None) -> str:
+def clean(
+    text: str,
+    persona_name: str | None = None,
+    context_authors: "set[str] | None" = None,
+) -> str:
     """Strip model artifacts that break the illusion."""
     text = _THINKING_RE.sub("", text)
     text = _STRAY_TAG_RE.sub("", text)
@@ -28,6 +32,17 @@ def clean(text: str, persona_name: str | None = None) -> str:
         echo = re.match(rf"^\s*{re.escape(persona_name)}\s*:\s*", text, re.IGNORECASE)
         if echo:
             text = text[echo.end() :]
+    # the prompt shows chat as "author: message", and the model leaks that
+    # format back by opening with whoever it is answering. real chat uses an
+    # @mention or nothing at all
+    if context_authors:
+        names = "|".join(
+            re.escape(a) for a in sorted(context_authors, key=len, reverse=True) if a
+        )
+        if names:
+            text = re.sub(
+                rf"^\s*(?:{names})\s*[:,]?\s+(?=\S)", "", text, count=1, flags=re.IGNORECASE
+            )
     if len(text) > 1 and text[0] == text[-1] == '"':
         text = text[1:-1]
     return text.strip()
@@ -49,8 +64,9 @@ def apply(
     persona_name: str | None = None,
     stats: dict | None = None,
     max_burst: int = 3,
+    context_authors: "set[str] | None" = None,
 ) -> list[str]:
-    text = clean(text, persona_name)
+    text = clean(text, persona_name, context_authors)
     stats = stats or {}
     capitalization = stats.get("capitalization", {})
     punctuation = stats.get("punctuation", {})

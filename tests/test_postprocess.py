@@ -55,3 +55,40 @@ def test_apply_neutralizes_mass_pings():
 
 def test_apply_no_stats_leaves_text_alone():
     assert apply("Ne vem.") == ["Ne vem."]
+
+
+AUTHORS = {"kekSoslav", "Lev"}
+
+
+def test_strips_leading_author_name_the_model_echoed():
+    """Observed live: every other reply opened with whoever it answered."""
+    assert clean("kekSoslav mislu da s ti", context_authors=AUTHORS) == "mislu da s ti"
+    assert clean("kekSoslav kako si", context_authors=AUTHORS) == "kako si"
+
+
+def test_strips_author_name_with_punctuation():
+    assert clean("kekSoslav, ja sm tu", context_authors=AUTHORS) == "ja sm tu"
+    assert clean("Lev: pridi", context_authors=AUTHORS) == "pridi"
+
+
+def test_author_name_stripping_is_case_insensitive():
+    assert clean("keksoslav ne vem", context_authors=AUTHORS) == "ne vem"
+
+
+def test_only_the_first_occurrence_is_stripped():
+    out = clean("kekSoslav a si vidu kaj je Lev naredil", context_authors=AUTHORS)
+    assert out == "a si vidu kaj je Lev naredil"
+
+
+def test_mention_form_is_left_alone():
+    """@mentions are how he actually addresses people, keep them."""
+    assert clean("@kekSoslav pridi", context_authors=AUTHORS) == "@kekSoslav pridi"
+
+
+def test_name_alone_is_not_stripped_to_nothing():
+    assert clean("kekSoslav", context_authors=AUTHORS) == "kekSoslav"
+
+
+def test_name_inside_the_sentence_survives():
+    out = clean("ja pa kekSoslav je reku da ne", context_authors=AUTHORS)
+    assert out == "ja pa kekSoslav je reku da ne"
