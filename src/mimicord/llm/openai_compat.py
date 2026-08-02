@@ -42,8 +42,22 @@ class OpenAICompatProvider:
         max_tokens: int,
         temperature: float | None = None,
     ) -> str:
-        wire = [{"role": "system", "content": system}]
-        wire += [{"role": m.role, "content": m.content} for m in messages]
+        wire: list[dict] = [{"role": "system", "content": system}]
+        for m in messages:
+            if m.images:
+                content: list[dict] = [{"type": "text", "text": m.content}]
+                content += [
+                    {
+                        "type": "image_url",
+                        "image_url": {
+                            "url": f"data:{image.media_type};base64,{image.data}"
+                        },
+                    }
+                    for image in m.images
+                ]
+                wire.append({"role": m.role, "content": content})
+            else:
+                wire.append({"role": m.role, "content": m.content})
         kwargs: dict = {}
         if temperature is not None:
             kwargs["temperature"] = temperature

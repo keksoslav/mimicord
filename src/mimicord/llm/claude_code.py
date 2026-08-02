@@ -37,8 +37,9 @@ class ClaudeCodeProvider:
         # the agent sdk has no max_tokens/temperature surface; the persona
         # prompt and the post processor keep replies short instead
         prompt = self._flatten(messages)
+        images = [image for message in messages for image in message.images]
         try:
-            return asyncio.run(self._query(system, prompt))
+            return asyncio.run(self._query(system, prompt, images))
         except ProviderError:
             raise
         except Exception as error:
@@ -56,7 +57,30 @@ class ClaudeCodeProvider:
                 parts.append(message.content)
         return "\n\n".join(parts)
 
-    async def _query(self, system: str, prompt: str) -> str:
+    @staticmethod
+    async def _stream(prompt: str, images: list):
+        """The sdk takes either a plain string or a stream of message dicts.
+        Pictures only fit in the second form."""
+        content: list[dict] = [{"type": "text", "text": prompt}]
+        content += [
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": image.media_type,
+                    "data": image.data,
+                },
+            }
+            for image in images
+        ]
+        yield {
+            "type": "user",
+            "message": {"role": "user", "content": content},
+            "parent_tool_use_id": None,
+            "session_id": "mimicord",
+        }
+
+    async def _query(self, system: str, prompt: str, images: list | None = None) -> str:
         from claude_agent_sdk import (
             AssistantMessage,
             ClaudeAgentOptions,
@@ -74,9 +98,10 @@ class ClaudeCodeProvider:
             allowed_tools=[],  # chat only, the bot must never grow hands
             setting_sources=[],  # do not load this machine's CLAUDE.md files
         )
+        source = self._stream(prompt, images) if images else prompt
         parts: list[str] = []
         try:
-            async for message in query(prompt=prompt, options=options):
+            async for message in query(prompt=source, options=options):
                 if isinstance(message, AssistantMessage):
                     for block in message.content:
                         if isinstance(block, TextBlock):

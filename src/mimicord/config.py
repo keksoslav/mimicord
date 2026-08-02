@@ -88,6 +88,21 @@ class RagConfig:
 
 
 @dataclass
+class VisionConfig:
+    """Letting him see costs pixels, so every default here is the cheap one."""
+
+    enabled: bool = False
+    # how many pictures may go in one prompt. more than one is rarely worth it
+    max_images: int = 1
+    # long edge in pixels after shrinking, the single biggest cost lever.
+    # 768 reads most memes and screenshots, 1024 reads small text, 512 is
+    # cheap but blurs anything written
+    max_edge: int = 768
+    # only pictures this recent are worth paying for
+    lookback: int = 4
+
+
+@dataclass
 class StyleConfig:
     max_burst: int = 3
     typing_cps: float = 7.0
@@ -116,6 +131,7 @@ class PersonaConfig:
     discord: DiscordConfig
     rag: RagConfig
     style: StyleConfig
+    vision: VisionConfig = field(default_factory=VisionConfig)
     reactions: list[Reaction] = field(default_factory=list)
 
 
@@ -215,6 +231,20 @@ def load_config(path: Path) -> PersonaConfig:
         typing_cps=float(style_data.get("typing_cps", 7.0)),
     )
 
+    vision_data = _table(data, "vision")
+    vision = VisionConfig(
+        enabled=bool(vision_data.get("enabled", False)),
+        max_images=int(vision_data.get("max_images", 1)),
+        max_edge=int(vision_data.get("max_edge", 768)),
+        lookback=int(vision_data.get("lookback", 4)),
+    )
+    if vision.max_images < 0:
+        raise ConfigError("vision.max_images cannot be negative")
+    if not 128 <= vision.max_edge <= 1568:
+        # below 128 nothing is legible, above 1568 anthropic shrinks it anyway
+        # and you have paid to upload pixels that got thrown away
+        raise ConfigError("vision.max_edge must be between 128 and 1568")
+
     reactions = []
     raw_reactions = data.get("reactions", [])
     if not isinstance(raw_reactions, list):
@@ -257,5 +287,6 @@ def load_config(path: Path) -> PersonaConfig:
         discord=discord,
         rag=rag,
         style=style,
+        vision=vision,
         reactions=reactions,
     )

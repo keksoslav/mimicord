@@ -97,6 +97,32 @@ and it falls back to `always_on_channels`. It counts against the same hourly and
 monthly caps as a normal reply, and the clock is wall clock, so restarting the
 bot halfway through a quiet weekend does not reset it. Off by default.
 
+He can see images too, which matters a lot if your chat is mostly memes and
+screenshots. Install it with `uv sync --extra vision` and turn it on:
+
+```toml
+[vision]
+enabled = true
+max_images = 1
+max_edge = 768
+lookback = 2
+```
+
+Images are billed by pixel count, roughly `width * height / 750` tokens, so
+`max_edge` is the whole cost story. Everything gets shrunk to that before it is
+sent, which turns a 16,000 token phone photo into about 400. At 768 a typical
+screenshot lands around 300 tokens, well under a cent, and only messages that
+actually carry an image pay anything. Drop to 512 if you want it cheaper and
+don't mind small text going blurry, go to 1024 if he keeps misreading
+screenshots.
+
+`lookback` is the other guard. It stops a meme from three messages ago being
+re-sent with every single reply for the rest of the conversation, which is how
+this gets expensive without you noticing.
+
+He can't tell you who is in a photo, by the way. Claude won't identify real
+people and you can't prompt around it.
+
 Someone in your server will eventually try to break him by pasting the same line
 twenty times. Repeats get ignored, and a burst of messages gets one reply instead
 of one each, because he waits `debounce_seconds` for you to finish typing before

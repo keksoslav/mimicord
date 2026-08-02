@@ -90,6 +90,27 @@ def check_artifacts(paths: PersonaPaths, cfg: PersonaConfig) -> list[Check]:
             Check(f"reaction {reaction.name}", size <= DISCORD_UPLOAD_LIMIT, detail)
         )
 
+    if cfg.vision.enabled:
+        try:
+            import PIL  # noqa: F401
+
+            edge = cfg.vision.max_edge
+            per_image = round(edge * edge / 750)
+            checks.append(
+                Check(
+                    "vision",
+                    True,
+                    f"up to {cfg.vision.max_images} image(s), {edge}px, "
+                    f"under ~{per_image} tokens each",
+                )
+            )
+        except ImportError:
+            checks.append(
+                Check("vision", False, "Pillow missing, uv sync --extra vision")
+            )
+    else:
+        checks.append(Check("vision", None, "disabled, he cannot see images"))
+
     if cfg.rag.enabled:
         checks.append(
             Check(

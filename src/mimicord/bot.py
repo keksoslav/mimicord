@@ -9,7 +9,7 @@ from datetime import datetime, timezone
 
 import discord
 
-from mimicord import postprocess
+from mimicord import postprocess, vision
 from mimicord.engine import ContextMessage, PersonaEngine
 from mimicord.triggers import MessageFacts, TriggerState, should_poke, should_reply
 from mimicord.usage import UsageLedger
@@ -95,8 +95,9 @@ class MimicClient(discord.Client):
             entry.author == author and entry.content == content
             for entry in list(buffer)[-REPEAT_WINDOW:]
         )
-        if content:
-            buffer.append(ContextMessage(author, content))
+        images = await self._download_images(message)
+        if content or images:
+            buffer.append(ContextMessage(author, content, images))
 
         facts = MessageFacts(
             channel_id=str(message.channel.id),
@@ -149,6 +150,41 @@ class MimicClient(discord.Client):
             isinstance(resolved, discord.Message)
             and resolved.author.id == self.user.id
         )
+
+    async def _download_images(self, message: discord.Message) -> list:
+        """Pull image attachments off the cdn and shrink them.
+
+        Shrinking happens here rather than at send time so the buffer only
+        ever holds the cheap version, however long it sits there.
+        """
+        cfg = self.engine.config.vision
+        if not cfg.enabled or cfg.max_images <= 0 or not message.attachments:
+            return []
+        images = []
+        for attachment in message.attachments:
+            if len(images) >= cfg.max_images:
+                break
+            if not vision.is_image(attachment.content_type):
+                continue
+            if attachment.size > vision.MAX_SOURCE_BYTES:
+                log.debug("skipping a %d byte attachment", attachment.size)
+                continue
+            try:
+                raw = await attachment.read()
+            except Exception as error:  # cdn hiccup, expired link, anything
+                log.debug("could not fetch an attachment: %s", error)
+                continue
+            image = await asyncio.to_thread(vision.prepare, raw, cfg.max_edge)
+            if image is not None:
+                log.info(
+                    "saw a %dx%d image in #%s, about %d tokens",
+                    image.width,
+                    image.height,
+                    message.channel.id,
+                    image.tokens,
+                )
+                images.append(image)
+        return images
 
     def _note_person(self, channel_id: int, user) -> None:
         people = self.people[channel_id]

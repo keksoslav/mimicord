@@ -78,6 +78,20 @@ class AnthropicProvider:
         return {"thinking": {"type": "disabled"}, "output_config": {"effort": "low"}}
 
     def _to_wire(self, message: ChatMessage) -> dict:
+        if message.images:
+            content: list[dict] = [{"type": "text", "text": message.content}]
+            content += [
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": image.media_type,
+                        "data": image.data,
+                    },
+                }
+                for image in message.images
+            ]
+            return {"role": message.role, "content": content}
         if message.cache_boundary:
             return {
                 "role": message.role,
