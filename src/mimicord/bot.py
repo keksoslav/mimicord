@@ -22,6 +22,8 @@ IDLE_CHECK_SECONDS = 300
 POKE_CANDIDATES = 6
 # how far back to look for the same line before calling it a flood
 REPEAT_WINDOW = 4
+# how many recent messages he must not parrot back word for word
+ECHO_LOOKBACK = 6
 
 
 class MimicClient(discord.Client):
@@ -54,7 +56,9 @@ class MimicClient(discord.Client):
         self.last_seen: dict[int, datetime] = {}
         # channel -> {user id: display name}, oldest talker first
         self.people: dict[int, dict[int, str]] = defaultdict(dict)
-        self.last_reply: dict[int, str] = {}
+        # kept per burst, not joined, so a reply that repeats only its first
+        # line is still caught
+        self.last_reply: dict[int, list[str]] = {}
         self.idle_task: asyncio.Task | None = None
 
     async def setup_hook(self) -> None:
@@ -232,29 +236,39 @@ class MimicClient(discord.Client):
         if not context:
             return
         log.info("replying in #%s (%s)", channel.id, reason)
-        bursts = await asyncio.to_thread(self.engine.reply, context)
-        if bursts and self._repeats_himself(channel.id, bursts):
-            # his own last message is already in the context and he said it
-            # again anyway, so ask outright. one retry, then give up: silence
-            # is cheaper than a loop
-            log.info("that repeats his last one in #%s, asking again", channel.id)
+        raw = await asyncio.to_thread(self.engine.reply, context)
+        bursts = self._fresh(channel.id, raw, context)
+        if raw and not bursts:
+            # everything he came up with was already in the channel, either his
+            # own last message or somebody else's. ask outright. one retry,
+            # then give up: silence is cheaper than a loop
+            log.info("only echoes in #%s, asking again", channel.id)
             self.ledger.increment(datetime.now(timezone.utc))
-            bursts = await asyncio.to_thread(
+            raw = await asyncio.to_thread(
                 self.engine.reply, context, self._say_something_else(channel.id)
             )
+            bursts = self._fresh(channel.id, raw, context)
         if not bursts:
-            log.warning("nothing to say in #%s, staying quiet", channel.id)
-            return
-        if self._repeats_himself(channel.id, bursts):
-            log.info("still repeating himself in #%s, staying quiet", channel.id)
+            log.info("nothing fresh to say in #%s, staying quiet", channel.id)
             return
         await self._send_bursts(channel, bursts)
 
-    def _repeats_himself(self, channel_id: int, bursts: list[str]) -> bool:
-        return "\n".join(bursts) == self.last_reply.get(channel_id)
+    def _fresh(self, channel_id: int, bursts: list[str], context) -> list[str]:
+        """Whatever is left once the lines already in the channel are removed."""
+        persona = self.engine.config.name
+        others = [
+            m.content
+            for m in context[-ECHO_LOOKBACK:]
+            if m.content and m.author != persona
+        ]
+        return postprocess.drop_echoes(
+            bursts,
+            said_by_me=self.last_reply.get(channel_id, []),
+            said_by_others=others,
+        )
 
     def _say_something_else(self, channel_id: int) -> str:
-        previous = (self.last_reply.get(channel_id) or "").replace("\n", " / ")
+        previous = " / ".join(self.last_reply.get(channel_id, []))
         return (
             f'You just said "{previous}" and you are about to say it again. '
             "Say something different. Do not rephrase that, react to what was "
@@ -336,7 +350,7 @@ class MimicClient(discord.Client):
         self.last_seen[channel.id] = datetime.now(timezone.utc)
         # what was asked for, not what went out, so the check in _respond
         # compares like with like
-        self.last_reply[channel.id] = "\n".join(bursts)
+        self.last_reply[channel.id] = list(bursts)
 
     async def _idle_loop(self) -> None:
         await self.wait_until_ready()

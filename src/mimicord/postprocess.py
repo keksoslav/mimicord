@@ -57,6 +57,43 @@ def clean(
     return text.strip()
 
 
+# echoing something this short back is just normal agreement ("kk", "ja",
+# "true"). above it, a verbatim match is parroting
+ECHO_MIN_CHARS = 8
+
+
+def drop_echoes(
+    bursts: list[str],
+    *,
+    said_by_me: "list[str] | None" = None,
+    said_by_others: "list[str] | None" = None,
+) -> list[str]:
+    """Remove lines that are already in the channel word for word.
+
+    Two tells, one fix. Repeating your own last message is the first, and
+    parroting back what somebody just said is the second. Both are exact
+    string matches, and both have been asked for in the prompt and ignored,
+    so they get handled here where they cannot be argued with.
+
+    Also dedups a reply against itself, since a burst that says the same
+    thing twice reads exactly as badly.
+    """
+    seen = {t.strip().casefold() for t in (said_by_me or []) if t.strip()}
+    mirrored = {
+        t.strip().casefold()
+        for t in (said_by_others or [])
+        if len(t.strip()) >= ECHO_MIN_CHARS
+    }
+    kept: list[str] = []
+    for burst in bursts:
+        key = burst.strip().casefold()
+        if not key or key in seen or key in mirrored:
+            continue
+        kept.append(burst)
+        seen.add(key)
+    return kept
+
+
 def split_bursts(text: str, max_burst: int = 3) -> list[str]:
     """One reply can come out as a few short messages, like humans type."""
     parts = [p.strip() for p in text.split("\n") if p.strip()]
