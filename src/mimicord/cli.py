@@ -420,6 +420,46 @@ def doctor(
 
 
 @app.command()
+def pictures(
+    name: str,
+    ask: str = typer.Option("", "--ask", help="try a description against the index"),
+    rebuild: bool = typer.Option(False, "--rebuild", help="start the index from scratch"),
+) -> None:
+    """Index media/pictures/ so he can send photos by describing them.
+
+    Captions come from the file and folder names, so pictures/svit/squat.jpg
+    is searchable as "svit squat". A captions.toml beside persona.toml can
+    override any of them. Costs nothing to run: the embeddings are local.
+    """
+    from mimicord import pictures as lib
+    from mimicord.config import load_config
+
+    paths = PersonaPaths.for_persona(name)
+    cfg = load_config(paths.config)
+
+    if ask:
+        library = lib.Library(paths)
+        match = library.find(ask, cfg.pictures.threshold)
+        if match is None:
+            typer.echo(f"nothing close enough to {ask!r} (limit {cfg.pictures.threshold})")
+            raise typer.Exit(1)
+        typer.echo(f"{ask!r} -> {match.path.name}")
+        typer.echo(f"  caption  {match.caption}")
+        typer.echo(f"  distance {match.distance:.2f} (limit {cfg.pictures.threshold})")
+        return
+
+    found = lib.scan(paths)
+    if not found:
+        typer.echo(f"no pictures in {paths.media_dir / lib.FOLDER}")
+        raise typer.Exit(1)
+    typer.echo(f"indexing {len(found)} picture(s)...")
+    count = lib.build_index(paths, rebuild=rebuild)
+    typer.echo(f"indexed {count}")
+    if not cfg.pictures.enabled:
+        typer.echo("note: [pictures] enabled = false, so he will not use them yet")
+
+
+@app.command()
 def redteam(
     name: str,
     no_rag: bool = typer.Option(False, "--no-rag", help="test the prompt alone"),

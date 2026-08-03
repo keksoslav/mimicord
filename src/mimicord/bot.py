@@ -10,6 +10,7 @@ from datetime import datetime, timezone
 import discord
 
 from mimicord import postprocess, vision
+from mimicord.config import Reaction
 from mimicord.engine import ContextMessage, PersonaEngine
 from mimicord.triggers import MessageFacts, TriggerState, should_poke, should_reply
 from mimicord.usage import UsageLedger
@@ -320,6 +321,30 @@ class MimicClient(discord.Client):
         """
         items: list[tuple[str, object, object]] = []  # text, reaction, file path
         for burst in bursts:
+            wanted = postprocess.picture_query(burst)
+            if wanted is not None:
+                match = self.engine.find_picture(wanted)
+                if match is None:
+                    # asking for a photo that does not exist costs nothing and
+                    # sends nothing, which is the right failure
+                    log.info("no photo like %r in #%s", wanted, channel.id)
+                    continue
+                # keyed on the file so the same photo does not come round again
+                found = Reaction(
+                    name=f"pic:{match.path.name}",
+                    cooldown=self.engine.config.pictures.repeat_cooldown_seconds,
+                )
+                if self._reaction_on_cooldown(channel.id, found):
+                    log.info("holding a photo back in #%s, too soon", channel.id)
+                    continue
+                log.info(
+                    "photo for %r -> %s (distance %.2f)",
+                    wanted,
+                    match.path.name,
+                    match.distance,
+                )
+                items.append((burst, found, match.path))
+                continue
             name = postprocess.reaction_name(burst)
             if name is None:
                 items.append((burst, None, None))

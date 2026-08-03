@@ -108,6 +108,23 @@ class VisionConfig:
 
 
 @dataclass
+class PicturesConfig:
+    """A searchable pile of photos he describes rather than picks from.
+
+    The point is that the prompt never carries a catalogue, so two hundred
+    pictures cost exactly the same as two.
+    """
+
+    enabled: bool = False
+    # how close a caption has to be before it counts. chroma l2 distance, so
+    # roughly 0 (identical) to 2 (unrelated). tighten it if he starts sending
+    # something almost right, loosen it if he sends nothing
+    threshold: float = 1.1
+    # the same photo should not come out twice in an evening
+    repeat_cooldown_seconds: float = 3600.0
+
+
+@dataclass
 class StyleConfig:
     max_burst: int = 3
     typing_cps: float = 7.0
@@ -154,6 +171,7 @@ class PersonaConfig:
     rag: RagConfig
     style: StyleConfig
     vision: VisionConfig = field(default_factory=VisionConfig)
+    pictures: PicturesConfig = field(default_factory=PicturesConfig)
     reactions: list[Reaction] = field(default_factory=list)
 
 
@@ -264,6 +282,17 @@ def load_config(path: Path) -> PersonaConfig:
         max_edge=int(vision_data.get("max_edge", 768)),
         lookback=int(vision_data.get("lookback", 4)),
     )
+    pictures_data = _table(data, "pictures")
+    pictures = PicturesConfig(
+        enabled=bool(pictures_data.get("enabled", False)),
+        threshold=float(pictures_data.get("threshold", 1.1)),
+        repeat_cooldown_seconds=float(
+            pictures_data.get("repeat_cooldown_seconds", 3600.0)
+        ),
+    )
+    if pictures.threshold < 0:
+        raise ConfigError("pictures.threshold cannot be negative")
+
     if vision.max_images < 0:
         raise ConfigError("vision.max_images cannot be negative")
     if not 128 <= vision.max_edge <= 1568:
@@ -317,5 +346,6 @@ def load_config(path: Path) -> PersonaConfig:
         rag=rag,
         style=style,
         vision=vision,
+        pictures=pictures,
         reactions=reactions,
     )

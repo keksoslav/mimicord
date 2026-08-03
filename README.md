@@ -90,7 +90,35 @@ Drop the file in `personas/janez/media/`. Tenor links work as `url = "..."` inst
 
 The `when` line is what the model reads to decide, so be specific there.
 
-For a pile of photos, point a tag at a folder instead and it picks one at random each time:
+## A pile of photos
+
+Reactions are fine for a handful of gifs, but they don't scale: every one is a line in the prompt, and a persona prompt that is mostly a picture catalogue stops being a persona prompt. For an actual photo collection, don't put it in the prompt at all.
+
+```
+mkdir personas/janez/media/pictures      # name the files descriptively
+uv run mimicord pictures janez           # index them, this is free and local
+```
+
+```toml
+[pictures]
+enabled = true
+threshold = 1.1
+```
+
+He then sends one by writing `[pic: what he wants]` and the nearest caption is looked up on your machine. **The prompt cost is the same whether you have 20 pictures or 2,000**, because it never contains a list, just the one instruction and an auto-generated line of what subjects exist.
+
+Captions come from the file and folder names, so `pictures/svit/squat.jpg` is findable as "svit squat". That means naming your files properly is the whole job. If a filename can't carry it, `captions.toml` beside `persona.toml` overrides any of them:
+
+```toml
+[captions]
+"IMG_2481.jpg" = "timi na morju z ocali"
+```
+
+`mimicord pictures janez --ask "timi z pivom"` shows you what a description resolves to, and costs nothing, so tune with that rather than by talking to the bot.
+
+Two things decide a match. The words have to actually overlap, compared in a way that survives Slovene endings so `pivom` finds `piva`, and only then does the embedding rank what's left. That order matters: doing it the other way round throws away a photo that plainly names the subject because it happened to rank twelfth. If nothing matches he sends nothing, which is the right failure.
+
+For a small fixed set of reaction gifs, point a tag at a folder instead and it picks one at random each time:
 
 ```toml
 [[reactions]]
