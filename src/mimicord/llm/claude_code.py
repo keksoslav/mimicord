@@ -92,20 +92,29 @@ class ClaudeCodeProvider:
         options = ClaudeAgentOptions(
             system_prompt=system,
             model=self._model,
-            # one turn is all a chat reply needs, but the sdk treats a turn
-            # that did not finish cleanly as a hard error, so leave headroom
-            max_turns=2,
+            # one turn only. two used to be headroom against the sdk treating
+            # an unfinished turn as a hard error, but the salvage below covers
+            # that now, and a second turn gives the model somewhere to write
+            # its plan out loud, which then ends up in the channel
+            max_turns=1,
             allowed_tools=[],  # chat only, the bot must never grow hands
             setting_sources=[],  # do not load this machine's CLAUDE.md files
         )
         source = self._stream(prompt, images) if images else prompt
-        parts: list[str] = []
+        # one entry per assistant turn, not one per text block. concatenating
+        # every block a run produced is how a plan the model wrote to itself
+        # ended up glued to the front of a real reply and posted to a channel
+        turns: list[str] = []
         try:
             async for message in query(prompt=source, options=options):
                 if isinstance(message, AssistantMessage):
-                    for block in message.content:
-                        if isinstance(block, TextBlock):
-                            parts.append(block.text)
+                    said = "".join(
+                        block.text
+                        for block in message.content
+                        if isinstance(block, TextBlock)
+                    )
+                    if said.strip():
+                        turns.append(said)
                 elif isinstance(message, ResultMessage):
                     cost = getattr(message, "total_cost_usd", None)
                     if cost is not None:
@@ -113,10 +122,16 @@ class ClaudeCodeProvider:
         except Exception as error:
             # the sdk raises on an error result, which throws away whatever it
             # streamed first. if he already said his piece, send that
-            if not parts:
+            if not turns:
                 raise
             log.warning("agent sdk ended badly (%s), keeping what it said", error)
-        text = "".join(parts).strip()
+        if len(turns) > 1:
+            log.warning(
+                "agent sdk returned %d turns, keeping the last and dropping %r",
+                len(turns),
+                "".join(turns[:-1])[:120],
+            )
+        text = (turns[-1] if turns else "").strip()
         if not text:
             raise ProviderError(
                 "empty response from the agent sdk, is Claude Code logged in on this machine?"
