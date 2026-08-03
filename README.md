@@ -90,6 +90,20 @@ Drop the file in `personas/janez/media/`. Tenor links work as `url = "..."` inst
 
 The `when` line is what the model reads to decide, so be specific there.
 
+For a pile of photos, point a tag at a folder instead and it picks one at random each time:
+
+```toml
+[[reactions]]
+name = "svit"
+dir = "people/svit"
+when = "photos of Svit, when he comes up or you're taking the piss out of him"
+cooldown = 3600
+```
+
+This matters more than it sounds. I have 31 photos of my mates in there and as 31 separate entries they'd be 31 lines of instructions sitting in a prompt whose entire job is to make him sound like one person. Grouped into 9 folders it costs 861 characters and he still picks sensibly. A persona prompt that is mostly a picture catalogue stops being a persona prompt.
+
+The other half is stopping him reaching for one every single message, which he absolutely will. Asking him not to does not work. `reaction_cooldown_seconds` under `[style]` is a floor between any two images, and `cooldown` on a single entry stops that specific one repeating. Mine are 4 minutes and an hour.
+
 He can also start conversations instead of only answering them:
 
 ```toml

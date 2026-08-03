@@ -43,7 +43,7 @@ def test_no_reactions_by_default(tmp_path):
 
 def test_reaction_needs_a_source(tmp_path):
     text = 'name = "x"\n[[reactions]]\nname = "angry"\n'
-    with pytest.raises(ConfigError, match="exactly one of file or url"):
+    with pytest.raises(ConfigError, match="exactly one of file, url or dir"):
         load_config(write(tmp_path, text))
 
 
@@ -52,7 +52,7 @@ def test_reaction_cannot_have_both_sources(tmp_path):
         'name = "x"\n[[reactions]]\nname = "a"\n'
         'file = "a.gif"\nurl = "https://tenor.com/view/x"\n'
     )
-    with pytest.raises(ConfigError, match="exactly one of file or url"):
+    with pytest.raises(ConfigError, match="exactly one of file, url or dir"):
         load_config(write(tmp_path, text))
 
 
@@ -126,6 +126,10 @@ def test_engine_advertises_reactions_and_resolves_paths(personas_home, fake_prov
     assert "[gif:angry] Lev is mean to you" in engine.system
     assert "[gif:shrug]" in engine.system
     angry = engine.find_reaction("angry")
+    # nothing on disk, so there is no usable path for it
+    assert engine.reaction_path(angry) is None
+    (PersonaPaths(root).media_dir).mkdir(parents=True, exist_ok=True)
+    (PersonaPaths(root).media_dir / "angry.gif").write_bytes(b"gif")
     assert engine.reaction_path(angry) == PersonaPaths(root).media_dir / "angry.gif"
     assert engine.find_reaction("ANGRY") is not None  # case insensitive
     assert engine.find_reaction("nope") is None
