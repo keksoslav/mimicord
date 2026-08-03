@@ -64,9 +64,9 @@ def test_flattens_messages_and_locks_down_options(sdk_stub):
     options = sdk_stub["options"]
     assert options["system_prompt"] == "be janez"
     assert options["model"] == "sonnet"
-    # a chat reply needs one turn, the second is headroom so the sdk does not
-    # hard-error on a turn that did not finish cleanly
-    assert options["max_turns"] == 2
+    # one turn only: a second gives the model somewhere to write its plan out
+    # loud, and that plan ends up in the channel
+    assert options["max_turns"] == 1
     assert options["allowed_tools"] == []
     assert options["setting_sources"] == []
     # few-shot pair flattened into the prompt, live message last

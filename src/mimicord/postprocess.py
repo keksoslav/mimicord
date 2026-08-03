@@ -26,6 +26,34 @@ _AI_ISMS = (
 )
 
 
+# the model writing itself a plan before answering. seen live as
+# "thanos gif from Bukvic, random. Respond in character, short.ka je zdj to
+# za gif", where the reply is welded to the end of the plan with no space
+_META_HINT = re.compile(r"\bin character\b|\bthe user\b|\brespond with\b", re.IGNORECASE)
+META_WINDOW = 200
+
+
+def strip_meta_preamble(text: str) -> str:
+    """Cut a planning sentence the model wrote to itself before replying.
+
+    Only looks at the opening, so a message that happens to use one of these
+    phrases in normal conversation later on is left alone. Nothing is cut
+    unless the sentence actually ends, since the alternative is eating a
+    whole reply on a false positive.
+    """
+    # a plan runs to a sentence or two, so keep cutting while the opening
+    # still looks like one, but never more than a few times
+    for _ in range(3):
+        match = _META_HINT.search(text[:META_WINDOW])
+        if not match:
+            break
+        end = text.find(".", match.end())
+        if end == -1 or end + 1 >= len(text):
+            break
+        text = text[end + 1 :].lstrip()
+    return text
+
+
 def clean(
     text: str,
     persona_name: str | None = None,
@@ -34,6 +62,7 @@ def clean(
     """Strip model artifacts that break the illusion."""
     text = _THINKING_RE.sub("", text)
     text = _STRAY_TAG_RE.sub("", text)
+    text = strip_meta_preamble(text)
     for pattern in _AI_ISMS:
         text = pattern.sub("", text)
     text = text.strip()
