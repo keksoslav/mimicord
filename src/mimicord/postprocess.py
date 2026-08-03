@@ -10,11 +10,20 @@ _STRAY_TAG_RE = re.compile(r"</?(thinking|reasoning|reflection|internal)>", re.I
 
 # a burst that is only this tag is sent as an image instead of as text
 REACTION_RE = re.compile(r"^\[gif:([a-zA-Z0-9_-]+)\]$")
+# the same idea but free text: he describes the photo he wants and the
+# nearest caption is looked up locally, so the prompt carries no catalogue
+PICTURE_RE = re.compile(r"^\[pic:\s*([^\]\r\n]{1,80})\]$")
 
 
 def reaction_name(burst: str) -> str | None:
     match = REACTION_RE.match(burst.strip())
     return match.group(1).lower() if match else None
+
+
+def picture_query(burst: str) -> str | None:
+    """What he asked for, if this burst is a picture request."""
+    match = PICTURE_RE.match(burst.strip())
+    return match.group(1).strip() if match else None
 
 
 _AI_ISMS = (
@@ -136,7 +145,7 @@ def drop_echoes(
     return kept
 
 
-_INLINE_TAG_RE = re.compile(r"\[gif:([a-zA-Z0-9_-]+)\]")
+_INLINE_TAG_RE = re.compile(r"\[(gif|pic):\s*([^\]\r\n]{1,80})\]")
 
 
 def split_out_tags(bursts: list[str]) -> list[str]:
@@ -148,14 +157,20 @@ def split_out_tags(bursts: list[str]) -> list[str]:
     """
     out: list[str] = []
     for burst in bursts:
-        if reaction_name(burst) or not _INLINE_TAG_RE.search(burst):
+        if (
+            reaction_name(burst)
+            or picture_query(burst)
+            or not _INLINE_TAG_RE.search(burst)
+        ):
             out.append(burst)
             continue
         text = _INLINE_TAG_RE.sub(" ", burst)
         text = " ".join(text.split())
         if text:
             out.append(text)
-        out.extend(f"[gif:{tag.lower()}]" for tag in _INLINE_TAG_RE.findall(burst))
+        for kind, body in _INLINE_TAG_RE.findall(burst):
+            body = body.strip()
+            out.append(f"[{kind}:{body.lower() if kind == 'gif' else body}]")
     return out
 
 

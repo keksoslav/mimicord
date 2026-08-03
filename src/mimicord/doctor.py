@@ -111,6 +111,33 @@ def check_artifacts(paths: PersonaPaths, cfg: PersonaConfig) -> list[Check]:
             detail += " (close to discord's 10 MB limit)"
         checks.append(Check(label, size <= DISCORD_UPLOAD_LIMIT, detail))
 
+    if cfg.pictures.enabled:
+        from mimicord import pictures as lib
+
+        on_disk = lib.scan(paths)
+        if not on_disk:
+            checks.append(
+                Check("pictures", False, f"nothing in {paths.media_dir / lib.FOLDER}")
+            )
+        else:
+            try:
+                indexed = lib.Library(paths).count()
+            except Exception as error:
+                indexed = 0
+                log_detail = f"index unreadable ({error})"
+            else:
+                log_detail = ""
+            if indexed == len(on_disk) and not log_detail:
+                detail = f"{indexed} indexed, prompt cost is fixed at any size"
+            else:
+                detail = log_detail or (
+                    f"{len(on_disk)} on disk but {indexed} indexed, "
+                    "run mimicord pictures"
+                )
+            checks.append(Check("pictures", indexed == len(on_disk), detail))
+    else:
+        checks.append(Check("pictures", None, "disabled"))
+
     if cfg.vision.enabled:
         try:
             import PIL  # noqa: F401

@@ -10,6 +10,17 @@ from pathlib import Path
 
 MEDIA_SUFFIXES = (".gif", ".png", ".jpg", ".jpeg", ".webp", ".mp4", ".webm")
 
+# The entire cost of the picture library, however many pictures are in it.
+# He describes what he wants, the nearest caption is found locally, and the
+# prompt never carries a list. Two hundred photos read exactly like two.
+PICTURE_BLOCK = """\
+## Photos
+You have a pile of real photos, of yourself and of the people you know. To \
+send one, put [pic: what the photo is] on a line by itself, a few words, in \
+whatever language you are speaking. Only when a photo actually adds \
+something. If there is nothing like it nothing gets sent, so never announce \
+that you are about to send a photo and never explain one afterwards."""
+
 from mimicord import postprocess, rules
 from mimicord.config import PersonaConfig, load_config
 from mimicord.llm.base import ChatMessage, Provider
@@ -141,6 +152,16 @@ class PersonaEngine:
         reactions = self._reaction_block()
         if reactions:
             self.system = f"{self.system}\n\n{reactions}"
+        self.library = self._load_library()
+        if self.config.pictures.enabled:
+            block = PICTURE_BLOCK
+            if self.library is not None:
+                subjects = self.library.subjects()
+                if subjects:
+                    # what he has photos of, not which photos. one line at any
+                    # library size, and it updates itself when you add more
+                    block += "\nRoughly what you have: " + ", ".join(subjects) + "."
+            self.system = f"{self.system}\n\n{block}"
         # last, always: whatever the model reads most recently carries the most
         # weight, and these are the lines that must not bend
         self.system = f"{self.system}\n\n{rules.HARD_RULES}"
@@ -222,6 +243,24 @@ class PersonaEngine:
         if messages:
             messages[-1].cache_boundary = True
         return messages
+
+    def find_picture(self, description: str):
+        """The photo he just asked for, or None if there is nothing like it."""
+        if self.library is None:
+            return None
+        return self.library.find(description, self.config.pictures.threshold)
+
+    def _load_library(self):
+        if not self.config.pictures.enabled:
+            return None
+        try:
+            from mimicord.pictures import Library
+        except ImportError:
+            return None
+        if not self.paths.chroma_dir.is_dir():
+            log.warning("pictures are on but nothing is indexed, run mimicord pictures")
+            return None
+        return Library(self.paths)
 
     def _load_rag(self):
         try:
