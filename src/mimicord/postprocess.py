@@ -66,20 +66,33 @@ def clean(
     for pattern in _AI_ISMS:
         text = pattern.sub("", text)
     text = text.strip()
-    if persona_name:
-        echo = re.match(rf"^\s*{re.escape(persona_name)}\s*:\s*", text, re.IGNORECASE)
-        if echo:
-            text = text[echo.end() :]
-    # the prompt shows chat as "author: message", and the model leaks that
-    # format back by opening with whoever it is answering. real chat uses an
-    # @mention or nothing at all
+    # the prompt shows chat as "author: message" and the model leaks that
+    # format back. "name:" is transcript formatting and never something a
+    # person types, so it comes off every line: live he sent "nikoli" and
+    # then "sandman: sam vprasi leva kdaj", and only the first line was
+    # ever being checked
+    speakers = [persona_name] if persona_name else []
+    speakers += [a for a in (context_authors or ()) if a]
+    if speakers:
+        named = "|".join(
+            re.escape(s) for s in sorted(set(speakers), key=len, reverse=True)
+        )
+        text = re.sub(
+            rf"^[ \t]*(?:{named})[ \t]*:[ \t]*",
+            "",
+            text,
+            flags=re.IGNORECASE | re.MULTILINE,
+        )
+    # a bare name with no colon is ambiguous, since "lev pride jutri" is a
+    # real sentence. only strip that where it opens the whole reply, which is
+    # the case that reads as answering someone by name
     if context_authors:
         names = "|".join(
             re.escape(a) for a in sorted(context_authors, key=len, reverse=True) if a
         )
         if names:
             text = re.sub(
-                rf"^\s*(?:{names})\s*[:,]?\s+(?=\S)", "", text, count=1, flags=re.IGNORECASE
+                rf"^\s*(?:{names})\s*,?\s+(?=\S)", "", text, count=1, flags=re.IGNORECASE
             )
     if len(text) > 1 and text[0] == text[-1] == '"':
         text = text[1:-1]
