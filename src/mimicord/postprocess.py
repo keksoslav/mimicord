@@ -123,6 +123,29 @@ def drop_echoes(
     return kept
 
 
+_INLINE_TAG_RE = re.compile(r"\[gif:([a-zA-Z0-9_-]+)\]")
+
+
+def split_out_tags(bursts: list[str]) -> list[str]:
+    """Pull a tag out of a line he wrote it into.
+
+    The prompt asks for the tag alone on its own line and he usually manages
+    it, but "nikol ne pride ko rces [gif:nik]" would otherwise go out with
+    the raw tag visible in the message, which is worse than sending nothing.
+    """
+    out: list[str] = []
+    for burst in bursts:
+        if reaction_name(burst) or not _INLINE_TAG_RE.search(burst):
+            out.append(burst)
+            continue
+        text = _INLINE_TAG_RE.sub(" ", burst)
+        text = " ".join(text.split())
+        if text:
+            out.append(text)
+        out.extend(f"[gif:{tag.lower()}]" for tag in _INLINE_TAG_RE.findall(burst))
+    return out
+
+
 def split_bursts(text: str, max_burst: int = 3) -> list[str]:
     """One reply can come out as a few short messages, like humans type."""
     parts = [p.strip() for p in text.split("\n") if p.strip()]
@@ -160,4 +183,6 @@ def apply(
         text = text[:-1]
     # the bot client also blocks mass pings via allowed_mentions, this is belt and suspenders
     text = text.replace("@everyone", "everyone").replace("@here", "here")
-    return split_bursts(text, max_burst)
+    # tags last: a tag rescued out of a line is its own message, and must not
+    # then be merged back into another one by the burst cap
+    return split_out_tags(split_bursts(text, max_burst))

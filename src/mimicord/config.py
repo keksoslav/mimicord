@@ -111,21 +111,38 @@ class VisionConfig:
 class StyleConfig:
     max_burst: int = 3
     typing_cps: float = 7.0
+    # give him a folder of photos and he will reach for one constantly. asking
+    # him not to does not work, so this is enforced per channel in code
+    reaction_cooldown_seconds: float = 0.0
 
 
 @dataclass
 class Reaction:
     """An image the persona can send instead of typing, by emitting a tag.
 
-    Either a file uploaded from media/, or a url posted as text. Tenor and
-    similar links are better as urls: discord embeds them natively and they
-    do not carry the expiring signature that cdn attachment links do.
+    One of three sources. A file uploaded from media/, a url posted as text
+    (better for tenor: discord embeds those natively and they do not carry
+    the expiring signature cdn attachment links do), or a directory, where
+    one picture is chosen at random each time.
+
+    The directory form exists so thirty photos of your mates cost one line
+    of prompt instead of thirty. A persona prompt that is mostly a picture
+    catalogue stops being a persona prompt.
     """
 
     name: str
     when: str = ""
     file: str = ""
     url: str = ""
+    dir: str = ""
+    # seconds before this particular tag may be used again in a channel, on
+    # top of the global one. a reaction gif every few minutes is fine, the
+    # same photo of your mate twice in an evening is not
+    cooldown: float = 0.0
+
+    @property
+    def source(self) -> str:
+        return self.file or self.url or self.dir
 
 
 @dataclass
@@ -235,6 +252,9 @@ def load_config(path: Path) -> PersonaConfig:
     style = StyleConfig(
         max_burst=int(style_data.get("max_burst", 3)),
         typing_cps=float(style_data.get("typing_cps", 7.0)),
+        reaction_cooldown_seconds=float(
+            style_data.get("reaction_cooldown_seconds", 0.0)
+        ),
     )
 
     vision_data = _table(data, "vision")
@@ -264,9 +284,10 @@ def load_config(path: Path) -> PersonaConfig:
         r_url = str(entry.get("url", "")).strip()
         if not r_name:
             raise ConfigError("every [[reactions]] entry needs a name")
-        if bool(r_file) == bool(r_url):
+        r_dir = str(entry.get("dir", "")).strip()
+        if sum(bool(x) for x in (r_file, r_url, r_dir)) != 1:
             raise ConfigError(
-                f"reaction {r_name!r} needs exactly one of file or url"
+                f"reaction {r_name!r} needs exactly one of file, url or dir"
             )
         if r_url and not r_url.startswith(("http://", "https://")):
             raise ConfigError(f"reaction {r_name!r} url must be http or https")
@@ -283,6 +304,8 @@ def load_config(path: Path) -> PersonaConfig:
                 when=str(entry.get("when", "")).strip(),
                 file=r_file,
                 url=r_url,
+                dir=r_dir,
+                cooldown=float(entry.get("cooldown", 0.0)),
             )
         )
 

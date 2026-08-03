@@ -73,12 +73,35 @@ def check_artifacts(paths: PersonaPaths, cfg: PersonaConfig) -> list[Check]:
         checks.append(Check("few-shots", None, "none, mimicord compile"))
 
     for reaction in cfg.reactions:
+        label = f"reaction {reaction.name}"
         if reaction.url:
-            checks.append(Check(f"reaction {reaction.name}", True, "url"))
+            checks.append(Check(label, True, "url"))
+            continue
+        if reaction.dir:
+            from mimicord.engine import MEDIA_SUFFIXES
+
+            folder = paths.media_dir / reaction.dir
+            pictures = (
+                [
+                    p
+                    for p in folder.iterdir()
+                    if p.is_file() and p.suffix.lower() in MEDIA_SUFFIXES
+                ]
+                if folder.is_dir()
+                else []
+            )
+            if not pictures:
+                checks.append(Check(label, False, f"nothing usable in {folder}"))
+                continue
+            oversized = [p for p in pictures if p.stat().st_size > DISCORD_UPLOAD_LIMIT]
+            detail = f"{len(pictures)} picture(s), one picked at random"
+            if oversized:
+                detail += f", {len(oversized)} over discord's 10 MB limit"
+            checks.append(Check(label, not oversized, detail))
             continue
         path = paths.media_dir / reaction.file
         if not path.is_file():
-            checks.append(Check(f"reaction {reaction.name}", False, str(path)))
+            checks.append(Check(label, False, str(path)))
             continue
         size = path.stat().st_size
         detail = f"{size // 1024} KB"
@@ -86,9 +109,7 @@ def check_artifacts(paths: PersonaPaths, cfg: PersonaConfig) -> list[Check]:
             detail += " (over discord's 10 MB limit, the upload will fail)"
         elif size > DISCORD_UPLOAD_LIMIT * 0.8:
             detail += " (close to discord's 10 MB limit)"
-        checks.append(
-            Check(f"reaction {reaction.name}", size <= DISCORD_UPLOAD_LIMIT, detail)
-        )
+        checks.append(Check(label, size <= DISCORD_UPLOAD_LIMIT, detail))
 
     if cfg.vision.enabled:
         try:

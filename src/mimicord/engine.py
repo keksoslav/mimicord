@@ -2,10 +2,13 @@ from __future__ import annotations
 
 import json
 import logging
+import random
 import re
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+
+MEDIA_SUFFIXES = (".gif", ".png", ".jpg", ".jpeg", ".webp", ".mp4", ".webm")
 
 from mimicord import postprocess, rules
 from mimicord.config import PersonaConfig, load_config
@@ -177,8 +180,24 @@ class PersonaEngine:
                 return reaction
         return None
 
-    def reaction_path(self, reaction) -> Path:
-        return self.paths.media_dir / reaction.file
+    def reaction_path(self, reaction) -> "Path | None":
+        """Where the image for this tag lives, or None if there is nothing.
+
+        A dir reaction picks one at random per use, which is the whole point:
+        nine tags in the prompt, thirty one photos behind them.
+        """
+        if reaction.file:
+            path = self.paths.media_dir / reaction.file
+            return path if path.is_file() else None
+        if not reaction.dir:
+            return None  # url reactions carry no local file
+        folder = self.paths.media_dir / reaction.dir
+        if not folder.is_dir():
+            return None
+        pictures = sorted(
+            p for p in folder.iterdir() if p.is_file() and p.suffix.lower() in MEDIA_SUFFIXES
+        )
+        return random.choice(pictures) if pictures else None
 
     @staticmethod
     def _load_json(path: Path):

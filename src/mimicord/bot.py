@@ -59,6 +59,8 @@ class MimicClient(discord.Client):
         # kept per burst, not joined, so a reply that repeats only its first
         # line is still caught
         self.last_reply: dict[int, list[str]] = {}
+        self.last_reaction_at: dict[int, float] = {}
+        self.last_tag_at: dict[tuple[int, str], float] = {}
         self.idle_task: asyncio.Task | None = None
 
     async def setup_hook(self) -> None:
@@ -275,6 +277,26 @@ class MimicClient(discord.Client):
             "actually said instead."
         )
 
+    def _reaction_on_cooldown(self, channel_id: int, reaction) -> bool:
+        """Hand him a folder of photos and he will reach for one every time.
+
+        Asking him not to does not survive contact with a real conversation,
+        so this is a wall rather than a request. Two of them: a global one so
+        he is not permanently answering in pictures, and a per tag one so the
+        same photo does not come out twice in an evening.
+        """
+        now = time.monotonic()
+        gap = self.style.reaction_cooldown_seconds
+        if gap > 0:
+            last = self.last_reaction_at.get(channel_id)
+            if last is not None and now - last < gap:
+                return True
+        if reaction.cooldown > 0:
+            last = self.last_tag_at.get((channel_id, reaction.name))
+            if last is not None and now - last < reaction.cooldown:
+                return True
+        return False
+
     async def _type_for(self, channel, seconds: float) -> None:
         """Show the typing indicator, then pause, before sending.
 
@@ -304,13 +326,16 @@ class MimicClient(discord.Client):
                 continue
             reaction = self.engine.find_reaction(name)
             path = None
-            if reaction is not None and reaction.file:
+            if reaction is not None and not reaction.url:
                 path = self.engine.reaction_path(reaction)
-                if not path.is_file():
+                if path is None:
                     reaction = None
             if reaction is None:
                 # never post a raw tag, it breaks the illusion worse than silence
                 log.warning("reaction %r is unusable, dropping", name)
+                continue
+            if self._reaction_on_cooldown(channel.id, reaction):
+                log.info("holding %r back in #%s, too soon after the last", name, channel.id)
                 continue
             items.append((burst, reaction, path))
         if not items:
@@ -327,9 +352,13 @@ class MimicClient(discord.Client):
 
         persona = self.engine.config.name
         for text, reaction, path in items:
+            if reaction is not None:
+                now = time.monotonic()
+                self.last_reaction_at[channel.id] = now
+                self.last_tag_at[(channel.id, reaction.name)] = now
             if self.dry_run:
                 if reaction is not None:
-                    what = f"<sends {reaction.file or reaction.url}>"
+                    what = f"<sends {path.name if path else reaction.url}>"
                 else:
                     what = text
                 log.info("[dry run #%s] %s: %s", channel, persona, what)
