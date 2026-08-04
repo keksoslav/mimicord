@@ -111,7 +111,7 @@ class MimicClient(discord.Client):
         )
         images = await self._download_images(message)
         if content or images:
-            buffer.append(ContextMessage(author, content, images))
+            buffer.append(ContextMessage(author, content, images, message.created_at))
 
         facts = MessageFacts(
             channel_id=str(message.channel.id),
@@ -226,7 +226,9 @@ class MimicClient(discord.Client):
         for m in reversed(history):  # history yields newest first
             text = (m.content or "").strip()
             if text:
-                buffer.append(ContextMessage(m.author.display_name, text))
+                buffer.append(
+                    ContextMessage(m.author.display_name, text, at=m.created_at)
+                )
             if m.author.bot or (self.user is not None and m.author.id == self.user.id):
                 continue
             self._note_person(channel.id, m.author)
@@ -400,7 +402,9 @@ class MimicClient(discord.Client):
                 await channel.send(text)
                 await asyncio.sleep(random.uniform(0.5, 1.5))
             # the buffer keeps the tag so he can see he already reacted
-            self.buffers[channel.id].append(ContextMessage(persona, text))
+            self.buffers[channel.id].append(
+                ContextMessage(persona, text, at=datetime.now(timezone.utc))
+            )
         self.last_seen[channel.id] = datetime.now(timezone.utc)
         # what was asked for, not what went out, so the check in _respond
         # compares like with like

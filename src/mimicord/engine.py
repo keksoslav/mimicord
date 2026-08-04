@@ -43,11 +43,63 @@ class ContextMessage:
     author: str
     content: str
     images: list = field(default_factory=list)
+    at: "datetime | None" = None
 
     def render(self) -> str:
         if self.content:
             return f"{self.author}: {self.content}"
         return f"{self.author}: (posted an image)"
+
+
+# under this a gap is just people typing at their own speed, and marking it
+# would put a line between every other message
+GAP_SECONDS = 45 * 60
+
+
+def describe_gap(seconds: float) -> str:
+    """A silence, in the roundest unit that still says something.
+
+    The unit is chosen by what the gap has passed and the count is rounded,
+    because truncating calls three days and twenty three hours "3 days" and
+    he will repeat that back as a fact.
+    """
+    for size, unit in ((604800, "week"), (86400, "day"), (3600, "hour")):
+        if seconds >= size:
+            count = max(1, round(seconds / size))
+            return f"{count} {unit}{'s' if count > 1 else ''}"
+    return f"{round(seconds / 60)} minutes"
+
+
+def _aware(moment: "datetime") -> "datetime":
+    """Naive timestamps are assumed local, so the subtraction cannot throw."""
+    return moment if moment.tzinfo else moment.astimezone()
+
+
+def render_transcript(context: list["ContextMessage"], now: "datetime | None" = None) -> str:
+    """The chat the way a person reads it, with the long silences marked.
+
+    Discord draws a divider when the day changes and everyone uses it to tell
+    a live conversation from something said last week. He was getting the
+    lines with nothing in between, so a message from Saturday read exactly
+    like one that had just arrived, and he would answer it as if it had.
+    """
+    lines: list[str] = []
+    previous: "datetime | None" = None
+    for message in context:
+        if previous is not None and message.at is not None:
+            gap = (_aware(message.at) - previous).total_seconds()
+            if gap >= GAP_SECONDS:
+                lines.append(f"[{describe_gap(gap)} later]")
+        if message.at is not None:
+            previous = _aware(message.at)
+        lines.append(message.render())
+    if now is not None and previous is not None:
+        gap = (_aware(now) - previous).total_seconds()
+        if gap >= GAP_SECONDS:
+            # otherwise the newest line reads as live however old it is, which
+            # is the whole problem when a buffer is seeded from history
+            lines.append(f"[that was {describe_gap(gap)} ago]")
+    return "\n".join(lines)
 
 
 def collect_images(context: list["ContextMessage"], cfg) -> list:
@@ -275,10 +327,11 @@ class PersonaEngine:
     def reply(self, context: list[ContextMessage], direction: str = "") -> list[str]:
         """Answer the recent chat. direction is an out of character nudge for
         the times nobody said anything to answer, like breaking a silence."""
-        transcript = "\n".join(m.render() for m in context)
+        moment = datetime.now().astimezone()
+        transcript = render_transcript(context, moment)
         # everything below rides in the final user message, never the system
         # prompt: a clock in a cached prefix would break the cache every minute
-        sections: list[str] = [now_section(datetime.now().astimezone())]
+        sections: list[str] = [now_section(moment)]
         if self.rag is not None:
             # query with just the tail of the conversation, that is what the
             # reply will actually be about
