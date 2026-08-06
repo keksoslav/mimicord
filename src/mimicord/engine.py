@@ -150,6 +150,58 @@ def memory_query(
     return "\n".join(lines)
 
 
+# two answered questions in a row from the same person is where a quiz
+# becomes visible; the nudge fires on the third
+QUIZ_STREAK = 2
+QUESTION_RE = re.compile(
+    r"\?|\b(koliko|kolk\w*|zakaj|kdaj|kdo|kje|kako|kaj|kva|"
+    r"what|why|when|who|where|how)\b",
+    re.IGNORECASE,
+)
+
+QUIZ_DIRECTION = (
+    "{asker} has been firing questions at you and you have answered {count} in "
+    "a row. if it is a genuine conversation, fine. but if you are being tested, "
+    "quizzed or wound up, you have noticed by now, and you do not owe an answer "
+    "to every question. react the way you actually would."
+)
+
+
+def quiz_streak(
+    context: list["ContextMessage"], persona_name: str
+) -> tuple[str | None, int]:
+    """How many questions from one person he has just answered, back to back.
+
+    Seen live: trick questions fired one after another, each getting an
+    instant obedient answer. The wrong answer was not the tell, people flub
+    trick questions too. The tell was that he answered every single one and
+    would have kept going forever. Nobody does that.
+
+    Counted as (question from the same asker, his reply) pairs, walking back
+    from the newest message. A message from anyone else, or one that is not a
+    question, ends the pattern: that is conversation, not interrogation.
+    """
+    asker: str | None = None
+    pairs = 0
+    pending = False  # a reply run seen, waiting for the question it answered
+    in_reply = False
+    for message in reversed(context):
+        if message.author == persona_name:
+            if not in_reply:
+                pending = True  # a burst of his counts as one reply
+            in_reply = True
+            continue
+        in_reply = False
+        if asker is None:
+            asker = message.author
+        if message.author != asker or not QUESTION_RE.search(message.content):
+            break
+        if pending:
+            pairs += 1
+            pending = False
+    return asker, pairs
+
+
 def now_section(moment: "datetime") -> str:
     """Tell him what day and time it is.
 
@@ -327,6 +379,10 @@ class PersonaEngine:
     def reply(self, context: list[ContextMessage], direction: str = "") -> list[str]:
         """Answer the recent chat. direction is an out of character nudge for
         the times nobody said anything to answer, like breaking a silence."""
+        if not direction:
+            asker, answered = quiz_streak(context, self.config.name)
+            if asker and answered >= QUIZ_STREAK:
+                direction = QUIZ_DIRECTION.format(asker=asker, count=answered)
         moment = datetime.now().astimezone()
         transcript = render_transcript(context, moment)
         # everything below rides in the final user message, never the system
